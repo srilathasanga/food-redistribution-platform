@@ -92,6 +92,34 @@ def create_organizations_table():
 
     print("Organizations table created successfully!")
 
+
+## 4. Volunteer Table Creation
+
+def create_volunteers_table():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS volunteers (
+            volunteer_id SERIAL PRIMARY KEY,
+            volunteer_name VARCHAR(150) NOT NULL,
+            phone VARCHAR(20),
+            email VARCHAR(150),
+            address TEXT,
+            city VARCHAR(100),
+            availability_status VARCHAR(20) DEFAULT 'AVAILABLE',
+            volunteer_status VARCHAR(20) DEFAULT 'ACTIVE',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    connection.commit()
+
+    cursor.close()
+    connection.close()
+
+    print("Volunteers table created successfully!")
+
 ## 4. Pickup request table creation
 def create_pickup_requests_table():
     connection = get_connection()
@@ -99,23 +127,28 @@ def create_pickup_requests_table():
 
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS pickup_requests (
-            pickup_id SERIAL PRIMARY KEY,
-            donation_id INTEGER NOT NULL,
-            organization_id INTEGER NOT NULL,
-            requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            pickup_time TIMESTAMP,
-            pickup_status VARCHAR(30) DEFAULT 'REQUESTED',
-            pickup_address TEXT,
-            notes TEXT,
+    pickup_id SERIAL PRIMARY KEY,
+    donation_id INTEGER NOT NULL,
+    organization_id INTEGER NOT NULL,
+    volunteer_id INTEGER,
+    requested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    pickup_time TIMESTAMP,
+    pickup_status VARCHAR(30) DEFAULT 'REQUESTED',
+    pickup_address TEXT,
+    notes TEXT,
 
-            CONSTRAINT fk_donation
-                FOREIGN KEY (donation_id)
-                REFERENCES food_donations(donation_id),
+    CONSTRAINT fk_donation
+        FOREIGN KEY (donation_id)
+        REFERENCES food_donations(donation_id),
 
-            CONSTRAINT fk_organization
-                FOREIGN KEY (organization_id)
-                REFERENCES organizations(organization_id)
-        );
+    CONSTRAINT fk_organization
+        FOREIGN KEY (organization_id)
+        REFERENCES organizations(organization_id),
+
+    CONSTRAINT fk_volunteer
+        FOREIGN KEY (volunteer_id)
+        REFERENCES volunteers(volunteer_id)
+    );
     """)
 
     connection.commit()
@@ -129,4 +162,5 @@ if __name__ == "__main__":
     create_restaurants_table()
     create_food_donations_table()
     create_organizations_table()
+    create_volunteers_table()
     create_pickup_requests_table()
