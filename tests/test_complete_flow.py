@@ -1,5 +1,6 @@
 from app.donation_service import add_food_donation
 from app.pickup_service import request_pickup, update_pickup_status
+from datetime import datetime, timedelta
 
 
 print("======================================")
@@ -10,6 +11,11 @@ print("======================================")
 # -------------------------------------------------
 # STEP 1: Create a new food donation
 # -------------------------------------------------
+now = datetime.now()
+
+prepared_time = now - timedelta(hours=1)
+expiry_time = now + timedelta(hours=6)
+pickup_time = now + timedelta(hours=2)
 
 donation_id = add_food_donation(
     restaurant_id=1,
@@ -17,8 +23,8 @@ donation_id = add_food_donation(
     food_category="Cooked Meals",
     quantity=20,
     unit="kg",
-    prepared_time="2026-09-17 10:00:00",
-    expiry_time="2026-09-17 18:00:00",
+    prepared_time=prepared_time,
+    expiry_time=expiry_time,
     food_type="VEGETARIAN",
     packaging_status="PACKED",
     pickup_address="123 Main Road, Hyderabad"
@@ -35,7 +41,7 @@ print("Donation ID:", donation_id)
 pickup_id = request_pickup(
     donation_id=donation_id,
     organization_id=1,
-    pickup_time="2026-09-17 13:00:00",
+    pickup_time=pickup_time,
     pickup_address="123 Main Road, Hyderabad",
     notes="End-to-end platform test."
 )
