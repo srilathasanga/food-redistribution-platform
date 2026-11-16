@@ -1,5 +1,7 @@
+import psycopg2
+
 from app.database import get_connection
-from datetime import datetime
+from app.timeutil import now_local
 
 
 def request_pickup(
@@ -16,7 +18,7 @@ def request_pickup(
 
         # 0. Validate pickup time
 
-        if pickup_time <= datetime.now():
+        if pickup_time <= now_local():
             raise ValueError(
                 "Pickup time must be in the future."
             )
@@ -50,7 +52,8 @@ def request_pickup(
         cursor.execute("""
             SELECT donation_status, expiry_time
             FROM food_donations
-            WHERE donation_id = %s;
+            WHERE donation_id = %s
+            FOR UPDATE;
         """, (donation_id,))
 
         donation = cursor.fetchone()
@@ -121,6 +124,12 @@ def request_pickup(
 
         return pickup_id
 
+    except psycopg2.errors.UniqueViolation:
+        connection.rollback()
+        raise ValueError(
+            "This donation already has an active pickup request."
+        )
+
     except Exception:
         connection.rollback()
         raise
@@ -131,12 +140,23 @@ def request_pickup(
 
 
 
-def get_all_pickup_requests():
+def get_all_pickup_requests(organization_id=None, volunteer_id=None):
+    """All pickups, or only one organization's / one volunteer's."""
+    filters = []
+    params = []
+    if organization_id is not None:
+        filters.append("p.organization_id = %s")
+        params.append(organization_id)
+    if volunteer_id is not None:
+        filters.append("p.volunteer_id = %s")
+        params.append(volunteer_id)
+    where_clause = ("WHERE " + " AND ".join(filters)) if filters else ""
+
     connection = get_connection()
     cursor = connection.cursor()
 
     try:
-        cursor.execute("""
+        cursor.execute(f"""
             SELECT
                 p.pickup_id,
                 f.food_name,
@@ -166,8 +186,10 @@ def get_all_pickup_requests():
             LEFT JOIN volunteers v
                 ON p.volunteer_id = v.volunteer_id
 
-            ORDER BY p.pickup_id;
-        """)
+            {where_clause}
+
+            ORDER BY p.pickup_id DESC;
+        """, params)
 
         return cursor.fetchall()
 
@@ -214,7 +236,8 @@ def update_pickup_status(pickup_id, new_status):
                 donation_id,
                 volunteer_id
             FROM pickup_requests
-            WHERE pickup_id = %s;
+            WHERE pickup_id = %s
+            FOR UPDATE;
         """, (pickup_id,))
 
         result = cursor.fetchone()
@@ -288,6 +311,7 @@ def assign_volunteer(pickup_id, volunteer_id):
                 volunteer_status
             FROM volunteers
             WHERE volunteer_id = %s
+            FOR UPDATE
             """,
             (volunteer_id,)
         )
@@ -295,27 +319,28 @@ def assign_volunteer(pickup_id, volunteer_id):
         volunteer = cursor.fetchone()
 
         if not volunteer:
-            raise Exception("Volunteer not found.")
+            raise ValueError("Volunteer not found.")
 
         availability_status = volunteer[0]
         volunteer_status = volunteer[1]
 
         if volunteer_status != "ACTIVE":
-            raise Exception(
+            raise ValueError(
                 "Volunteer is not active."
             )
 
         if availability_status != "AVAILABLE":
-            raise Exception(
+            raise ValueError(
                 "Volunteer is not available."
             )
 
         # Check pickup status
         cursor.execute(
             """
-            SELECT pickup_status
+            SELECT pickup_status, volunteer_id
             FROM pickup_requests
             WHERE pickup_id = %s
+            FOR UPDATE
             """,
             (pickup_id,)
         )
@@ -323,12 +348,17 @@ def assign_volunteer(pickup_id, volunteer_id):
         pickup = cursor.fetchone()
 
         if not pickup:
-            raise Exception(
+            raise ValueError(
                 "Pickup request not found."
             )
 
+        if pickup[1] is not None:
+            raise ValueError(
+                "A volunteer is already assigned to this pickup."
+            )
+
         if pickup[0] != "ACCEPTED":
-            raise Exception(
+            raise ValueError(
                 "Volunteer can only be assigned "
                 "to an ACCEPTED pickup."
             )

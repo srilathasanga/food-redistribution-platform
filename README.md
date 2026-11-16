@@ -30,7 +30,7 @@ The application was developed as a personal project to understand how a real-wor
 | Technology    | Purpose                               |
 | ------------- | ------------------------------------- |
 | Python        | Application and business logic        |
-| FastAPI       | REST API backend                      |
+| FastAPI       | Optional REST API (`app/main.py`)     |
 | Streamlit     | User interface                        |
 | PostgreSQL    | Relational database                   |
 | SQL           | Database operations                   |
@@ -41,39 +41,30 @@ The application was developed as a personal project to understand how a real-wor
 ## 🏗️ Application Structure
 
 ```text
-food_redistribution/
-│
+food-redistribution-platform/
+├── app.py                      Streamlit website (pages for each role)
 ├── app/
-│   ├── __init__.py
-│   ├── database.py
+│   ├── auth.py                 Google login, access requests
+│   ├── backend.py              Functions the pages call
+│   ├── config.py               Settings from env / .env / Streamlit secrets
+│   ├── database.py             Connection pool, India timezone
+│   ├── schema.py               Creates and updates tables
+│   ├── timeutil.py             One clock for the whole app
+│   ├── user_service.py         Users, roles, approvals
 │   ├── donation_service.py
 │   ├── food_risk_service.py
 │   ├── organization_service.py
 │   ├── pickup_service.py
 │   ├── restaurant_service.py
-│   └── volunteer_service.py
-│
-├── tests/
-│   ├── test_assign_volunteer.py
-│   ├── test_complete_flow.py
-│   ├── test_db.py
-│   ├── test_donation_pickup_flow.py
-│   ├── test_donation_service.py
-│   ├── test_donation_validation.py
-│   ├── test_duplicate_pickup.py
-│   ├── test_organization_service.py
-│   ├── test_pickup_service.py
-│   ├── test_pickup_status.py
-│   ├── test_restaurant_service.py
-│   └── test_volunteer_service.py
-│
-├── app.py
-├── main.py
+│   ├── volunteer_service.py
+│   └── main.py                 Optional FastAPI version (not deployed)
+├── tests/                      Automated tests (pytest)
+├── .streamlit/secrets.toml.example
 ├── create_tables.py
 ├── insert_sample_data.py
-├── test_database.py
-├── requirements.txt
-└── README.md
+├── requirements.txt            Website
+├── requirements-api.txt        Optional FastAPI
+└── requirements-dev.txt        Tests
 ```
 
 ## 🔄 Business Workflow
@@ -238,145 +229,112 @@ This separation keeps the business logic modular and easier to maintain and test
 
 ## 🗄️ Database
 
-The application uses **PostgreSQL** for persistent data storage.
+The application uses **PostgreSQL**. The live app uses a free [Neon](https://neon.com) database (permanent free plan, no credit card).
 
-The platform works with entities such as:
+Tables: restaurants, food_donations, organizations, volunteers, pickup_requests, and app_users (who may log in, and in which role).
 
-* Restaurants
-* Food Donations
-* Organizations
-* Pickup Requests
-* Volunteers
+Tables are created automatically when the app starts (`app/schema.py`). This is safe to repeat: it only adds what is missing and never deletes data.
 
-The relationships between these entities allow the application to maintain the complete donation-to-delivery workflow.
+## 🏗️ How the app is deployed
 
-## 🔌 Backend
+```text
+Browser ──► Streamlit app (Streamlit Community Cloud)
+              │  app.py  ─►  app/backend.py  ─►  app/*_service.py
+              ▼
+           PostgreSQL (Neon)
+```
 
-The backend is implemented using **FastAPI**.
+The Streamlit app calls the service functions directly. There is no separate API server to keep awake, so there are no "Read timed out" errors and no public API exposing data.
 
-FastAPI provides API endpoints for interacting with the application and supports automatic API documentation.
+The FastAPI version (`app/main.py`) still works for learning or for a future mobile app. It has **no login**, so do not deploy it publicly as it is. Run it with `pip install -r requirements-api.txt` and `uvicorn app.main:app --reload`.
 
-The application can be explored through FastAPI's interactive documentation when the backend is running.
+## 🔐 Login and roles
 
-## 🖥️ Frontend
+People sign in with Google (Streamlit's built-in `st.login()`). Each person has one role:
 
-A **Streamlit** interface is used to provide a simple user-facing application for interacting with the platform.
+| Role | Who | Can |
+| --- | --- | --- |
+| Admin | Ministry coordinators | Everything: approve people, verify organizations, accept pickups, assign volunteers |
+| Donor | Restaurant, caterer, family | Register their kitchen; post food donations |
+| Organization | NGO, home, charity | Register; once verified, see available food and request pickups for themselves |
+| Volunteer | Drivers and helpers | See only pickups assigned to them; mark picked up and delivered |
 
-This allows the project to demonstrate both:
-
-* Backend API development
-* User interface integration
+A new person signs in, picks a role, and waits; an admin approves them under **User Access**. Emails listed in `ADMIN_EMAILS` become admins automatically. Phone numbers and addresses of volunteers and others are visible to admins only.
 
 ## 🧪 Testing
 
-The project includes automated tests covering important business scenarios.
+41 automated tests cover donation validation, organization verification and rejection, the full pickup flow, duplicate and simultaneous pickup requests, India-time checks, volunteer assignment rules, user approval, and every page clicked through as each role (using Streamlit's `AppTest`).
 
-Examples include:
-
-* Database connectivity
-* Donation creation
-* Donation validation
-* Restaurant operations
-* Organization operations
-* Pickup creation
-* Duplicate pickup validation
-* Pickup status transitions
-* Volunteer assignment
-* Volunteer operations
-* Complete donation/pickup flow
-
-Tests are maintained separately under the `tests/` directory.
-
-Run the test suite using:
+The tests **empty every table**, so they need a separate, throw-away database:
 
 ```bash
+pip install -r requirements-dev.txt
+# PowerShell:  $env:TEST_DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/food_test"
+export TEST_DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/food_test"
 pytest
 ```
 
+Without `TEST_DATABASE_URL` the tests are skipped, so they can never wipe the real database.
+
 ## ⚙️ Configuration
 
-Environment-specific configuration is maintained using environment variables.
+Settings come from environment variables, a local `.env` file, or Streamlit secrets. Nothing secret goes in the code or on GitHub. See `.streamlit/secrets.toml.example`.
 
-Sensitive configuration such as database credentials should be stored in a local `.env` file.
-
-Example:
-
-```env
-DATABASE_URL=your_database_connection_string
-```
-
-**Do not commit the `.env` file to GitHub.**
+| Setting | Meaning |
+| --- | --- |
+| `DATABASE_URL` | Postgres connection string (Neon "pooled" string). The older `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` also work. |
+| `ADMIN_EMAILS` | Comma-separated emails that become admins |
+| `APP_TIMEZONE` | Defaults to `Asia/Kolkata`; all times are entered and checked in this zone |
+| `[auth]` section | Google sign-in (below) |
+| `DEV_LOGIN=true` | **Local testing only**: sign in by typing an email instead of Google |
 
 ## ▶️ Running the Project Locally
-
-### 1. Clone the repository
 
 ```bash
 git clone https://github.com/srilathasanga/food-redistribution-platform.git
 cd food-redistribution-platform
-```
-
-### 2. Create a virtual environment
-
-```bash
 python -m venv .venv
-```
-
-### 3. Activate the virtual environment
-
-Windows PowerShell:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-### 4. Install dependencies
-
-```bash
+.venv\Scripts\Activate.ps1        # Windows PowerShell
 pip install -r requirements.txt
 ```
 
-### 5. Configure environment variables
+Create a `.env` file:
 
-Create a `.env` file and provide the required PostgreSQL/database configuration.
-
-### 6. Create database tables
-
-```bash
-python create_tables.py
+```env
+DATABASE_URL=postgresql://postgres:PASSWORD@localhost:5432/food_redistribution
+ADMIN_EMAILS=you@example.com
+DEV_LOGIN=true
 ```
 
-### 7. Insert sample data
+Then run `streamlit run app.py`, open http://localhost:8501 and sign in as `you@example.com`. Optional: `python insert_sample_data.py` adds demo data.
 
-```bash
-python insert_sample_data.py
-```
+## 🚀 Deploying for free (Streamlit Cloud + Neon + Google login)
 
-### 8. Start the FastAPI application
+### 1. Create the database on Neon
 
-Depending on the configured entry point:
+1. Sign up at [neon.com](https://neon.com) with the **ministry's** Google account, and create a project (region: Asia Pacific, Singapore).
+2. Click **Connect**, tick **Connection pooling**, and copy the connection string.
+3. To bring across existing data from the old database, run `pg_dump --no-owner --no-acl "OLD_DATABASE_URL" > backup.sql` and then `psql "NEON_DATABASE_URL" < backup.sql`. Otherwise start empty: the app creates the tables.
 
-```bash
-uvicorn main:app --reload
-```
+### 2. Set up Google login
 
-FastAPI documentation will normally be available at:
+1. In [Google Cloud Console](https://console.cloud.google.com) (ministry account), create a project.
+2. **APIs & Services → OAuth consent screen**: External, app name "Food Redistribution Platform", then **Publish app**.
+3. **Credentials → Create credentials → OAuth client ID** → Web application. Under *Authorized redirect URIs* add `https://YOUR-APP.streamlit.app/oauth2callback` (and `http://localhost:8501/oauth2callback` for local testing).
+4. Copy the client ID and secret.
+5. Make a cookie secret: `python -c "import secrets; print(secrets.token_hex(32))"`.
 
-```text
-http://127.0.0.1:8000/docs
-```
+### 3. Configure Streamlit Community Cloud
 
-### 9. Start the Streamlit application
+In the app's **Settings → Secrets**, paste the content of `.streamlit/secrets.toml.example` filled in with the real values (`DATABASE_URL`, `ADMIN_EMAILS`, and the `[auth]` section). Save, then reboot the app.
 
-```bash
-streamlit run app.py
-```
+### 4. Retire the old server
 
-The Streamlit application will normally be available at:
+Once the new version works, suspend or delete the old Render web service and database. The old FastAPI service has no login, so it should not stay online.
 
-```text
-http://localhost:8501
-```
+### 5. Back up
+
+Run a monthly backup: `pg_dump --no-owner --no-acl "NEON_DATABASE_URL" > backup-YYYY-MM.sql`, and keep it in the ministry's Google Drive.
 
 ## 🧪 Example End-to-End Scenario
 
@@ -434,13 +392,11 @@ This project helped me gain practical experience in:
 
 Potential future improvements include:
 
-* Authentication and role-based authorization
 * Real-time volunteer notifications
 * Location-based volunteer assignment
 * Food expiry alerts
 * Dashboard and analytics
 * Docker containerization
-* Cloud deployment
 * CI/CD pipeline
 * Improved audit logging
 * Integration with mapping/location services

@@ -1,730 +1,40 @@
-
 import streamlit as st
-import requests
 
-
-FASTAPI_URL = "https://food-redistribution-platform-ya7e.onrender.com"
-
-
-# =========================================================
-# AVAILABLE DONATIONS API
-# =========================================================
-
-def get_available_donations_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/donations/available",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": f"API error: {response.status_code}"
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": (
-                "FastAPI is not running. "
-                "Please start FastAPI on port 8000."
-            )
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# DONATION SUMMARY API
-# =========================================================
-
-def get_donation_summary_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/donations/summary",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-
-            return response.json()["summary"]
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# PICKUP REQUESTS API
-# =========================================================
-
-def get_pickup_requests_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/pickups",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": f"API error: {response.status_code}"
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# RESTAURANTS API
-# =========================================================
-
-def get_restaurants_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/restaurants",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": f"API error: {response.status_code}"
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# VOLUNTEER API
-# =========================================================
-
-def create_volunteer_from_api(volunteer_data):
-
-    try:
-
-        response = requests.post(
-            f"{FASTAPI_URL}/volunteers",
-            json=volunteer_data,
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-def get_volunteers_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/volunteers",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# VOLUNTEER SUMMARY API
-# =========================================================
-
-def get_volunteer_summary_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/volunteers/summary",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()["summary"]
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# PICKUP SUMMARY API
-# =========================================================
-
-def get_pickup_summary_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/pickups/summary",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()["summary"]
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# RESTAURANT CREATE API
-# =========================================================
-
-def create_restaurant_from_api(restaurant_data):
-
-    try:
-
-        response = requests.post(
-            f"{FASTAPI_URL}/restaurants",
-            json=restaurant_data,
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# DONATION CREATE API
-# =========================================================
-
-def create_donation_from_api(donation_data):
-
-    try:
-
-        response = requests.post(
-            f"{FASTAPI_URL}/donations",
-            json=donation_data,
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# ORGANIZATION API
-# =========================================================
-
-def create_organization_from_api(organization_data):
-
-    try:
-
-        response = requests.post(
-            f"{FASTAPI_URL}/organizations",
-            json=organization_data,
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-def get_verified_organizations_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/organizations/verified",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": f"API error: {response.status_code}"
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-def get_pending_organizations_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/organizations/pending",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": f"API error: {response.status_code}"
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# ORGANIZATION SUMMARY API
-# =========================================================
-
-def get_organization_summary_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/organizations/summary",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()["summary"]
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# VERIFY ORGANIZATION API
-# =========================================================
-
-def verify_organization_from_api(organization_id):
-
-    try:
-
-        response = requests.put(
-            f"{FASTAPI_URL}/organizations/{organization_id}/verify",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# REJECT ORGANIZATION API
-# =========================================================
-
-def reject_organization_from_api(
-    organization_id,
-    rejection_reason
-):
-
-    try:
-
-        response = requests.put(
-            f"{FASTAPI_URL}/organizations/{organization_id}/reject",
-            json={
-                "rejection_reason": rejection_reason
-            },
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# PICKUP CREATE API
-# =========================================================
-
-def create_pickup_from_api(pickup_data):
-
-    try:
-
-        response = requests.post(
-            f"{FASTAPI_URL}/pickups",
-            json=pickup_data,
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# UPDATE PICKUP STATUS API
-# =========================================================
-
-def update_pickup_status_from_api(
-    pickup_id,
-    new_status
-):
-
-    try:
-
-        response = requests.put(
-            f"{FASTAPI_URL}/pickups/{pickup_id}/status",
-            json={
-                "new_status": new_status
-            },
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# ASSIGN VOLUNTEER API
-# =========================================================
-
-def assign_volunteer_to_pickup_from_api(
-    pickup_id,
-    volunteer_id
-):
-
-    try:
-
-        response = requests.put(
-            f"{FASTAPI_URL}/pickups/{pickup_id}/volunteer",
-            json={
-                "volunteer_id": volunteer_id
-            },
-            timeout=5
-        )
-
-        if response.status_code == 200:
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
-
-
-# =========================================================
-# AI FOOD RISK ANALYSIS API
-# =========================================================
-
-def get_food_risk_analysis_from_api():
-
-    try:
-
-        response = requests.get(
-            f"{FASTAPI_URL}/donations/risk-analysis",
-            timeout=5
-        )
-
-        if response.status_code == 200:
-
-            return response.json()
-
-        return {
-            "error": response.json().get(
-                "detail",
-                f"API error: {response.status_code}"
-            )
-        }
-
-    except requests.exceptions.ConnectionError:
-
-        return {
-            "error": "FastAPI is not running."
-        }
-
-    except requests.exceptions.RequestException as e:
-
-        return {
-            "error": f"Request failed: {str(e)}"
-        }
+from app.auth import ROLE_LABELS, logout_button, require_user
+from app.backend import (
+    assign_volunteer_to_pickup_from_api,
+    create_donation_from_api,
+    create_organization_from_api,
+    create_pickup_from_api,
+    create_restaurant_from_api,
+    create_volunteer_from_api,
+    get_available_donations_from_api,
+    get_donation_summary_from_api,
+    get_food_risk_analysis_from_api,
+    get_organization_summary_from_api,
+    get_pending_organizations_from_api,
+    get_pickup_requests_from_api,
+    get_pickup_summary_from_api,
+    get_restaurants_from_api,
+    get_verified_organizations_from_api,
+    get_volunteer_summary_from_api,
+    get_volunteers_from_api,
+    reject_organization_from_api,
+    update_pickup_status_from_api,
+    verify_organization_from_api,
+)
+from app.schema import ensure_schema
+from app.timeutil import now_local
+from app.user_service import (
+    ROLES,
+    approve_user,
+    get_organization,
+    get_restaurant,
+    link_organization,
+    link_restaurant,
+    list_users,
+    set_user_status,
+)
 
 
 # =========================================================
@@ -738,6 +48,22 @@ st.set_page_config(
 )
 
 
+@st.cache_resource(show_spinner="Preparing the database...")
+def prepare_database():
+    # Creates any missing tables once per server start.
+    ensure_schema()
+    return True
+
+
+prepare_database()
+
+
+def flash_success(message):
+    """Show a success message after the page refreshes with fresh data."""
+    st.session_state["flash"] = message
+    st.rerun()
+
+
 st.title("🍲 Food Redistribution Platform")
 
 st.write(
@@ -747,21 +73,63 @@ st.write(
 
 
 # =========================================================
-# SIDEBAR NAVIGATION
+# LOGIN
 # =========================================================
 
-st.sidebar.title("Navigation")
+user = require_user()
+role = user["role"]
+is_admin = role == "ADMIN"
 
-menu = st.sidebar.radio(
-    "Choose a module",
-    [
+if "flash" in st.session_state:
+    st.success(st.session_state.pop("flash"))
+
+
+# =========================================================
+# SIDEBAR NAVIGATION (each role sees only its own pages)
+# =========================================================
+
+MENUS = {
+    "ADMIN": [
         "Home",
         "Restaurants",
         "Food Donations",
         "Organizations",
+        "Pickup Requests",
         "Admin",
-        "Pickup Requests"
-    ]
+        "User Access",
+    ],
+    "DONOR": ["Home", "My Restaurant", "Food Donations"],
+    "ORGANIZATION": [
+        "Home",
+        "My Organization",
+        "Available Food",
+        "Pickup Requests",
+    ],
+    "VOLUNTEER": ["Home", "My Pickups"],
+}
+
+st.sidebar.title("Navigation")
+st.sidebar.caption(
+    f"Signed in as {user['full_name'] or user['email']} · {role.title()}"
+)
+logout_button()
+
+menu = st.sidebar.radio(
+    "Choose a module",
+    MENUS[role]
+)
+
+if menu not in MENUS[role]:
+    st.error("You do not have access to this page.")
+    st.stop()
+
+my_restaurant = (
+    get_restaurant(user["restaurant_id"])
+    if user["restaurant_id"] else None
+)
+my_organization = (
+    get_organization(user["organization_id"])
+    if user["organization_id"] else None
 )
 
 
@@ -771,21 +139,270 @@ menu = st.sidebar.radio(
 
 if menu == "Home":
 
-    st.header("Welcome")
+    st.header(f"Welcome, {user['full_name'] or user['email']}")
+    st.caption(ROLE_LABELS[role])
 
-    st.success(
-        "Food Redistribution Platform is running successfully! ✅"
-    )
+    if is_admin:
+        pending_users = list_users(status="PENDING")
+        pending_orgs = get_pending_organizations_from_api()
+        col1, col2 = st.columns(2)
+        col1.metric("People waiting for access", len(pending_users))
+        col2.metric(
+            "Organizations waiting for verification",
+            len(pending_orgs.get("organizations", [])),
+        )
+        st.info(
+            "Approve people under **User Access**, verify organizations "
+            "and assign volunteers under **Admin** and **Pickup Requests**."
+        )
 
-    st.info(
-        "Backend: Python + PostgreSQL\n\n"
-        "Frontend: Streamlit"
-    )
+    elif role == "DONOR":
+        if my_restaurant:
+            st.info(
+                f"You donate as **{my_restaurant[1]}**. "
+                "Post surplus food under **Food Donations**."
+            )
+        else:
+            st.warning(
+                "First register your restaurant or kitchen under "
+                "**My Restaurant**, then post food under **Food Donations**."
+            )
+
+    elif role == "ORGANIZATION":
+        if not my_organization:
+            st.warning(
+                "Register your organization under **My Organization**. "
+                "An admin will verify it before you can request food."
+            )
+        elif my_organization[8] == "VERIFIED":
+            st.success(
+                f"**{my_organization[1]}** is verified. See **Available Food** "
+                "and request a pickup under **Pickup Requests**."
+            )
+        else:
+            st.info(
+                f"**{my_organization[1]}** is "
+                f"{my_organization[8].lower()} verification."
+            )
+
+    elif role == "VOLUNTEER":
+        st.info(
+            "Your assigned pickups are under **My Pickups**. Mark each one "
+            "picked up and then delivered as you go."
+        )
 
 
 # =========================================================
-# RESTAURANTS
+# MY RESTAURANT (donor)
 # =========================================================
+
+elif menu == "My Restaurant":
+
+    st.header("🏪 My Restaurant")
+
+    if my_restaurant:
+        st.write(f"**Name:** {my_restaurant[1]}")
+        st.write(f"**Contact person:** {my_restaurant[2]}")
+        st.write(f"**Phone:** {my_restaurant[3]}")
+        st.write(f"**Email:** {my_restaurant[4]}")
+        st.write(f"**Address:** {my_restaurant[5]}")
+        st.write(f"**City:** {my_restaurant[6]}")
+        st.caption("To change these details, please contact an admin.")
+    else:
+        st.write("Register the restaurant or kitchen you donate from.")
+        with st.form("my_restaurant_form"):
+            restaurant_name = st.text_input("Restaurant / kitchen name")
+            contact_person = st.text_input(
+                "Contact person", value=user["full_name"] or ""
+            )
+            phone = st.text_input("Phone", value=user["phone"] or "")
+            email = st.text_input("Email", value=user["email"])
+            address = st.text_area("Address")
+            city = st.text_input("City", value=user["city"] or "")
+            if st.form_submit_button("Register", type="primary"):
+                if not restaurant_name.strip():
+                    st.error("Name is required.")
+                else:
+                    result = create_restaurant_from_api({
+                        "restaurant_name": restaurant_name,
+                        "contact_person": contact_person,
+                        "phone": phone,
+                        "email": email,
+                        "address": address,
+                        "city": city,
+                    })
+                    if "error" in result:
+                        st.error(result["error"])
+                    else:
+                        link_restaurant(
+                            user["email"], result["restaurant_id"]
+                        )
+                        flash_success(
+                            "Registered! You can now post food donations."
+                        )
+
+
+# =========================================================
+# MY ORGANIZATION (receiving organization)
+# =========================================================
+
+elif menu == "My Organization":
+
+    st.header("🏢 My Organization")
+
+    if my_organization:
+        st.write(f"**Name:** {my_organization[1]}")
+        st.write(f"**Type:** {my_organization[7]}")
+        st.write(f"**Contact person:** {my_organization[2]}")
+        st.write(f"**Phone:** {my_organization[3]}")
+        st.write(f"**Address:** {my_organization[5]}, {my_organization[6]}")
+        status = my_organization[8]
+        if status == "VERIFIED":
+            st.success("Verified. You can request food pickups.")
+        elif status == "REJECTED":
+            st.error(
+                "Not approved. Reason: "
+                f"{my_organization[10] or 'not given'}. "
+                "Please contact an admin."
+            )
+        else:
+            st.info("Waiting for an admin to verify your organization.")
+    else:
+        st.write("Register the organization that will receive food.")
+        with st.form("my_organization_form"):
+            organization_name = st.text_input("Organization name")
+            contact_person = st.text_input(
+                "Contact person", value=user["full_name"] or ""
+            )
+            phone = st.text_input("Phone", value=user["phone"] or "")
+            email = st.text_input("Email", value=user["email"])
+            address = st.text_area("Address")
+            city = st.text_input("City", value=user["city"] or "")
+            organization_type = st.selectbox(
+                "Organization type",
+                ["NGO", "Charity", "Food Bank",
+                 "Community Organization", "Other"],
+            )
+            if st.form_submit_button("Register", type="primary"):
+                if not organization_name.strip():
+                    st.error("Organization name is required.")
+                else:
+                    result = create_organization_from_api({
+                        "organization_name": organization_name,
+                        "contact_person": contact_person,
+                        "phone": phone,
+                        "email": email,
+                        "address": address,
+                        "city": city,
+                        "organization_type": organization_type,
+                    })
+                    if "error" in result:
+                        st.error(result["error"])
+                    else:
+                        link_organization(
+                            user["email"], result["organization_id"]
+                        )
+                        flash_success(
+                            "Registered! An admin will verify your "
+                            "organization soon."
+                        )
+
+
+# =========================================================
+# AVAILABLE FOOD (receiving organization)
+# =========================================================
+
+elif menu == "Available Food":
+
+    st.header("🍱 Available Food")
+    donation_response = get_available_donations_from_api()
+    if "error" in donation_response:
+        st.error(donation_response["error"])
+    elif donation_response["donations"]:
+        for donation in donation_response["donations"]:
+            st.write(
+                f"**{donation[2]}** — {donation[4]} {donation[5]} — "
+                f"{donation[1]} — {donation[8].replace('_', ' ').title()} — "
+                f"Expires: {donation[7].replace('T', ' ')[:16]}"
+            )
+        st.caption("Request any of these under **Pickup Requests**.")
+    else:
+        st.info("No food is available right now. Please check back later.")
+
+
+# =========================================================
+# USER ACCESS (admin)
+# =========================================================
+
+elif menu == "User Access":
+
+    st.header("🔐 User Access")
+
+    st.subheader("Waiting for approval")
+    pending_users = list_users(status="PENDING")
+    if not pending_users:
+        st.success("Nobody is waiting. ✅")
+    for person in pending_users:
+        with st.container(border=True):
+            st.write(
+                f"**{person['full_name']}** · {person['email']} · "
+                f"{person['phone'] or 'no phone'} · {person['city'] or ''}"
+            )
+            st.caption(f"Asked to join as {person['role'].title()}")
+            col1, col2, col3 = st.columns([2, 1, 1])
+            chosen_role = col1.selectbox(
+                "Role",
+                ROLES,
+                index=ROLES.index(person["role"]),
+                key=f"role_{person['email']}",
+                label_visibility="collapsed",
+            )
+            if col2.button("Approve", key=f"approve_{person['email']}",
+                           type="primary"):
+                try:
+                    approve_user(person["email"], chosen_role)
+                    flash_success(
+                        f"{person['email']} approved as {chosen_role.title()}."
+                    )
+                except ValueError as error:
+                    st.error(str(error))
+            if col3.button("Decline", key=f"decline_{person['email']}"):
+                set_user_status(person["email"], "DISABLED")
+                flash_success(f"{person['email']} declined.")
+
+    st.divider()
+    st.subheader("All users")
+    everyone = list_users()
+    st.dataframe(
+        [
+            {
+                "Email": person["email"],
+                "Name": person["full_name"],
+                "Role": person["role"].title(),
+                "Status": person["status"].title(),
+                "Last login": person["last_login_at"],
+            }
+            for person in everyone
+        ],
+        hide_index=True,
+        use_container_width=True,
+    )
+
+    active_others = [
+        person for person in everyone
+        if person["email"] != user["email"]
+    ]
+    if active_others:
+        st.write("**Change someone's access**")
+        col1, col2, col3 = st.columns([3, 2, 1])
+        target_email = col1.selectbox(
+            "User", [person["email"] for person in active_others]
+        )
+        new_status = col2.selectbox("Status", ["ACTIVE", "DISABLED"])
+        if col3.button("Save", key="save_status"):
+            set_user_status(target_email, new_status)
+            flash_success(f"{target_email} is now {new_status.lower()}.")
+
 
 elif menu == "Restaurants":
 
@@ -855,7 +472,7 @@ elif menu == "Restaurants":
 
                 else:
 
-                    st.success(
+                    flash_success(
                         f"Restaurant created successfully! "
                         f"Restaurant ID: "
                         f"{result['restaurant_id']}"
@@ -918,11 +535,19 @@ elif menu == "Food Donations":
 
         restaurants = restaurant_response["restaurants"]
 
+    if not is_admin:
+        # A donor can only post food for their own restaurant.
+        restaurants = [
+            restaurant for restaurant in restaurants
+            if restaurant[0] == user["restaurant_id"]
+        ]
+
     if not restaurants:
 
         st.warning(
             "No restaurants are available. "
-            "Please register a restaurant first."
+            "Please register a restaurant first"
+            + (" under **My Restaurant**." if not is_admin else ".")
         )
 
     else:
@@ -970,7 +595,8 @@ elif menu == "Food Donations":
             )
 
             prepared_date = st.date_input(
-                "Prepared Date"
+                "Prepared Date",
+                value=now_local().date()
             )
 
             prepared_time = st.time_input(
@@ -978,7 +604,8 @@ elif menu == "Food Donations":
             )
 
             expiry_date = st.date_input(
-                "Expiry Date"
+                "Expiry Date",
+                value=now_local().date()
             )
 
             expiry_time = st.time_input(
@@ -1053,7 +680,7 @@ elif menu == "Food Donations":
 
                 else:
 
-                    st.success(
+                    flash_success(
                         f"Food donation created successfully! "
                         f"Donation ID: "
                         f"{result['donation_id']}"
@@ -1181,7 +808,7 @@ elif menu == "Organizations":
 
             else:
 
-                st.success(
+                flash_success(
                     f"Organization registered successfully! "
                     f"Organization ID: "
                     f"{result['organization_id']}"
@@ -1789,7 +1416,7 @@ elif menu == "Admin":
 
                         else:
 
-                            st.success(
+                            flash_success(
                                 f"Organization "
                                 f"#{result['organization_id']} "
                                 f"verified successfully!"
@@ -1832,7 +1459,7 @@ elif menu == "Admin":
 
                             else:
 
-                                st.success(
+                                flash_success(
                                     f"Organization "
                                     f"#{result['organization_id']} "
                                     f"has been rejected successfully!"
@@ -1930,7 +1557,7 @@ elif menu == "Admin":
 
                 else:
 
-                    st.success(
+                    flash_success(
                         f"Volunteer created successfully! "
                         f"Volunteer ID: "
                         f"{result['volunteer_id']}"
@@ -1975,9 +1602,21 @@ elif menu == "Admin":
 # PICKUP REQUESTS
 # =========================================================
 
-elif menu == "Pickup Requests":
+elif menu in ("Pickup Requests", "My Pickups"):
 
-    st.header("🚚 Pickup Requests")
+    st.header(
+        "🚚 My Pickups" if role == "VOLUNTEER" else "🚚 Pickup Requests"
+    )
+
+    # Who may do what on this page:
+    #   admin         everything
+    #   volunteer     sees only pickups assigned to them; marks them
+    #                 picked up and delivered
+    #   organization  sees only its own pickups; requests new ones
+    can_accept = is_admin
+    can_assign = is_admin
+    can_progress = is_admin or role == "VOLUNTEER"
+    can_request = is_admin or role == "ORGANIZATION"
 
     # -----------------------------------------------------
     # PICKUP REQUEST DASHBOARD
@@ -1987,7 +1626,16 @@ elif menu == "Pickup Requests":
 
     try:
 
-        pickup_response = get_pickup_requests_from_api()
+        if role == "ORGANIZATION":
+            pickup_response = get_pickup_requests_from_api(
+                organization_id=user["organization_id"] or -1
+            )
+        elif role == "VOLUNTEER":
+            pickup_response = get_pickup_requests_from_api(
+                volunteer_id=user["volunteer_id"] or -1
+            )
+        else:
+            pickup_response = get_pickup_requests_from_api()
 
         if "error" in pickup_response:
 
@@ -2003,26 +1651,30 @@ elif menu == "Pickup Requests":
                 pickup_response["pickups"]
             )
 
-        volunteer_response = get_volunteers_from_api()
+        volunteers = []
 
-        if "error" in volunteer_response:
+        if can_assign:
 
-            st.error(
-                volunteer_response["error"]
-            )
+            volunteer_response = get_volunteers_from_api()
 
-            volunteers = []
+            if "error" in volunteer_response:
 
-        else:
+                st.error(
+                    volunteer_response["error"]
+                )
 
-            volunteers = (
-                volunteer_response["volunteers"]
-            )
+            else:
+
+                volunteers = (
+                    volunteer_response["volunteers"]
+                )
 
         if not pickup_requests:
 
             st.info(
-                "No pickup requests found."
+                "No pickups assigned to you yet."
+                if role == "VOLUNTEER"
+                else "No pickup requests found."
             )
 
         else:
@@ -2071,12 +1723,12 @@ elif menu == "Pickup Requests":
 
                     st.write(
                         f"**Requested At:** "
-                        f"{requested_at}"
+                        f"{str(requested_at).replace('T', ' ')[:16]}"
                     )
 
                     st.write(
                         f"**Pickup Time:** "
-                        f"{pickup_time}"
+                        f"{str(pickup_time).replace('T', ' ')[:16]}"
                     )
 
                     st.write(
@@ -2097,6 +1749,17 @@ elif menu == "Pickup Requests":
                         st.success(
                             f"👤 Assigned Volunteer: "
                             f"{volunteer_name}"
+                        )
+
+                    elif not can_assign:
+
+                        st.write("**Volunteer:** not assigned yet")
+
+                    elif pickup_status != "ACCEPTED":
+
+                        st.caption(
+                            "Accept this pickup first, "
+                            "then assign a volunteer."
                         )
 
                     else:
@@ -2159,7 +1822,7 @@ elif menu == "Pickup Requests":
 
                                 else:
 
-                                    st.success(
+                                    flash_success(
                                         "Volunteer assigned successfully! "
                                         f"Volunteer ID: {selected_id}"
                                     )
@@ -2177,7 +1840,7 @@ elif menu == "Pickup Requests":
                     # REQUESTED → ACCEPTED
                     # -------------------------------------
 
-                    if pickup_status == "REQUESTED":
+                    if pickup_status == "REQUESTED" and can_accept:
 
                         if st.button(
                             "✅ Accept Pickup",
@@ -2200,7 +1863,7 @@ elif menu == "Pickup Requests":
 
                             else:
 
-                                st.success(
+                                flash_success(
                                     f"Pickup "
                                     f"#{result['pickup_id']} "
                                     f"accepted successfully!"
@@ -2210,7 +1873,7 @@ elif menu == "Pickup Requests":
                     # ACCEPTED → PICKED_UP
                     # -------------------------------------
 
-                    elif pickup_status == "ACCEPTED":
+                    elif pickup_status == "ACCEPTED" and can_progress:
 
                         if st.button(
                             "📦 Mark Picked Up",
@@ -2233,7 +1896,7 @@ elif menu == "Pickup Requests":
 
                             else:
 
-                                st.success(
+                                flash_success(
                                     f"Pickup "
                                     f"#{result['pickup_id']} "
                                     f"marked as PICKED_UP!"
@@ -2243,7 +1906,7 @@ elif menu == "Pickup Requests":
                     # PICKED_UP → DELIVERED
                     # -------------------------------------
 
-                    elif pickup_status == "PICKED_UP":
+                    elif pickup_status == "PICKED_UP" and can_progress:
 
                         if st.button(
                             "🚚 Mark Delivered",
@@ -2266,7 +1929,7 @@ elif menu == "Pickup Requests":
 
                             else:
 
-                                st.success(
+                                flash_success(
                                     f"Pickup "
                                     f"#{result['pickup_id']} "
                                     f"marked as DELIVERED!"
@@ -2291,6 +1954,9 @@ elif menu == "Pickup Requests":
     # -----------------------------------------------------
     # REQUEST PICKUP
     # -----------------------------------------------------
+
+    if not can_request:
+        st.stop()
 
     st.divider()
 
@@ -2326,10 +1992,13 @@ elif menu == "Pickup Requests":
     else:
 
         donation_options = {
-            f"{row[0]} - {row[1]} "
-            f"({row[2]} {row[3]}) - {row[5]}":
+            f"#{row[0]} {row[2]} ({row[4]} {row[5]}) from {row[1]}, "
+            f"expires {str(row[7]).replace('T', ' ')[:16]}":
             row[0]
             for row in available_donations
+        }
+        donation_addresses = {
+            row[0]: row[10] or "" for row in available_donations
         }
 
         selected_donation = st.selectbox(
@@ -2364,10 +2033,20 @@ elif menu == "Pickup Requests":
                 for organization in organizations
             ]
 
+        if role == "ORGANIZATION":
+            # An organization can only request food for itself.
+            verified_organizations = [
+                row for row in verified_organizations
+                if row[0] == user["organization_id"]
+            ]
+
         if not verified_organizations:
 
             st.warning(
-                "No verified organizations available."
+                "Your organization must be registered and verified "
+                "before it can request food."
+                if role == "ORGANIZATION"
+                else "No verified organizations available."
             )
 
         else:
@@ -2388,7 +2067,8 @@ elif menu == "Pickup Requests":
             ]
 
             pickup_date = st.date_input(
-                "Pickup Date"
+                "Pickup Date",
+                value=now_local().date()
             )
 
             pickup_time_input = st.time_input(
@@ -2396,7 +2076,9 @@ elif menu == "Pickup Requests":
             )
 
             pickup_address = st.text_input(
-                "Pickup Address"
+                "Pickup Address",
+                value=donation_addresses.get(donation_id, ""),
+                key=f"pickup_address_{donation_id}"
             )
 
             notes = st.text_area(
@@ -2439,7 +2121,7 @@ elif menu == "Pickup Requests":
 
                     else:
 
-                        st.success(
+                        flash_success(
                             f"Pickup request created successfully! "
                             f"Pickup ID: {result['pickup_id']}"
                         )

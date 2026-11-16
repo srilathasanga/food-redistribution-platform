@@ -1,7 +1,6 @@
 
-from datetime import datetime
-
 from app.database import get_connection
+from app.timeutil import now_local
 
 # from app.food_risk_service import get_food_risk_analysis
 
@@ -13,7 +12,7 @@ from app.database import get_connection
 
 def calculate_food_risk(expiry_time):
 
-    now = datetime.now()
+    now = now_local()
 
     time_remaining = expiry_time - now
 

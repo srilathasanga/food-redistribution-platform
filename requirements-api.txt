@@ -1,0 +1,4 @@
+# Optional: run the FastAPI version (app/main.py) for learning or a future mobile app
+-r requirements.txt
+fastapi==0.141.1
+uvicorn==0.50.2

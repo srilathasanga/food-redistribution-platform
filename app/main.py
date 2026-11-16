@@ -438,10 +438,16 @@ def assign_volunteer_to_pickup(
     assignment: VolunteerAssignment
 ):
 
-    result = assign_volunteer(
-        pickup_id,
-        assignment.volunteer_id
-    )
+    try:
+        result = assign_volunteer(
+            pickup_id,
+            assignment.volunteer_id
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
 
     return {
         "message": "Volunteer assigned successfully",
