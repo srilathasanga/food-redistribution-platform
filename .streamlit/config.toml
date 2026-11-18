@@ -1,0 +1,63 @@
+# Look and feel of the app. Colours are defined ONCE here; app/ui.py
+# uses these named colours (green, yellow, blue, gray, red...) for badges
+# and charts. Every text/background pair below passes WCAG AA contrast.
+#
+# Status colours:
+#   green  = available / verified / active
+#   yellow = reserved / waiting (amber)
+#   blue   = picked up / on the way
+#   gray   = delivered / finished / switched off
+#   red    = expired / urgent / not approved
+
+[theme]
+base = "light"
+
+# One warm primary colour: deep "harvest" green (buttons, links, focus).
+primaryColor = "#1E6B4E"
+
+# Calm, warm neutrals.
+backgroundColor = "#FBF8F3"
+secondaryBackgroundColor = "#F3EEE6"
+textColor = "#1F2A24"
+borderColor = "#E4DDD2"
+linkColor = "#1E6B4E"
+
+# Soft, rounded shapes.
+baseRadius = "0.75rem"
+buttonRadius = "0.75rem"
+showSidebarBorder = true
+
+# Status colours (used by st.badge and :color[...] text).
+greenColor = "#2F8F5B"
+greenBackgroundColor = "#DCF2E3"
+greenTextColor = "#14532D"
+
+yellowColor = "#B7791F"
+yellowBackgroundColor = "#FDF0C8"
+yellowTextColor = "#713F12"
+
+blueColor = "#2F6FD6"
+blueBackgroundColor = "#DCE8FB"
+blueTextColor = "#1E3A8A"
+
+grayColor = "#8A8F98"
+grayBackgroundColor = "#E8E6E1"
+grayTextColor = "#374151"
+
+redColor = "#C8423A"
+redBackgroundColor = "#FBE0DD"
+redTextColor = "#7F1D1D"
+
+orangeColor = "#C2410C"
+orangeBackgroundColor = "#FDE5D2"
+orangeTextColor = "#7C2D12"
+
+violetColor = "#6D28D9"
+violetBackgroundColor = "#ECE3FB"
+violetTextColor = "#4C1D95"
+
+# Charts use the same status colours, in this order.
+chartCategoricalColors = ["#1E6B4E", "#B7791F", "#2F6FD6", "#8A8F98", "#C8423A", "#6D28D9"]
+
+[theme.sidebar]
+backgroundColor = "#F3EEE6"
