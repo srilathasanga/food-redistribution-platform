@@ -200,3 +200,19 @@ def test_privacy_page_is_public():
 def test_login_screen_links_to_privacy_policy():
     at = open_app()
     assert "?page=privacy" in all_text(at)
+
+
+def test_friendly_message_when_database_is_down(monkeypatch):
+    import app.schema
+
+    def broken():
+        raise RuntimeError("database unreachable")
+
+    monkeypatch.setattr(app.schema, "ensure_schema", broken)
+    import streamlit as st
+    st.cache_resource.clear()
+    at = AppTest.from_file("app.py", default_timeout=30).run()
+    assert not at.exception, at.exception
+    assert "can't reach the app's database" in all_text(at)
+    assert "Try again" in [b.label for b in at.button]
+    st.cache_resource.clear()

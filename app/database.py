@@ -41,6 +41,11 @@ def _connect_kwargs():
     }
 
 
+def is_configured():
+    """True if any database setting exists (it may still be wrong)."""
+    return bool(get_setting("DATABASE_URL") or get_setting("DB_NAME"))
+
+
 def _get_pool():
     global _pool
     if _pool is None:

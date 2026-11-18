@@ -1,3 +1,6 @@
+import logging
+
+import psycopg2
 import streamlit as st
 
 from app.auth import ROLE_LABELS, logout_button, require_user
@@ -23,6 +26,7 @@ from app.backend import (
     update_pickup_status_from_api,
     verify_organization_from_api,
 )
+from app.database import is_configured
 from app.privacy import (
     is_privacy_request,
     privacy_link_markdown,
@@ -67,7 +71,49 @@ def prepare_database():
     return True
 
 
-prepare_database()
+logger = logging.getLogger("food_app")
+
+
+def database_unavailable_screen(show_title=True):
+    """Friendly message instead of a Python traceback. Stops the page."""
+    if show_title:
+        st.title("🍲 Food Redistribution Platform")
+    st.error(
+        "We can't reach the app's database right now, so the app is "
+        "paused. Your information is safe.",
+        icon=":material/cloud_off:",
+    )
+    st.markdown(
+        "**Please try again in a minute.** If it keeps happening, tell "
+        "the ministry admin."
+    )
+    if st.button("Try again", type="primary"):
+        st.rerun()
+    with st.expander("For the admin: how to fix this"):
+        if not is_configured():
+            st.markdown(
+                "No database is set up. Add `DATABASE_URL` (the Neon "
+                "connection string) to the Streamlit secrets, or to `.env` "
+                "on your own computer."
+            )
+        else:
+            st.markdown(
+                "- Check that `DATABASE_URL` in the Streamlit secrets is "
+                "correct (copy it again from the Neon dashboard).\n"
+                "- Check that the Neon project is running.\n"
+                "- The exact error is in the app logs (Streamlit Cloud: "
+                "**Manage app** → logs)."
+            )
+    st.caption(privacy_link_markdown())
+    st.stop()
+
+
+try:
+    prepare_database()
+except Exception:
+    # Not cached when it fails, so the next visit tries again.
+    logger.exception("Could not prepare the database")
+    database_unavailable_screen()
 
 
 def flash_success(message):
@@ -88,7 +134,11 @@ st.write(
 # LOGIN
 # =========================================================
 
-user = require_user()
+try:
+    user = require_user()
+except psycopg2.Error:
+    logger.exception("Database error while signing in")
+    database_unavailable_screen(show_title=False)
 role = user["role"]
 is_admin = role == "ADMIN"
 
