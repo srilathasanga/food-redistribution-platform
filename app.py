@@ -23,6 +23,11 @@ from app.backend import (
     update_pickup_status_from_api,
     verify_organization_from_api,
 )
+from app.privacy import (
+    is_privacy_request,
+    privacy_link_markdown,
+    render_privacy_page,
+)
 from app.schema import ensure_schema
 from app.timeutil import now_local
 from app.user_service import (
@@ -46,6 +51,13 @@ st.set_page_config(
     page_icon="🍲",
     layout="wide"
 )
+
+
+# Public privacy policy (?page=privacy). It must work without login and
+# without the database, so it runs before both.
+if is_privacy_request():
+    render_privacy_page()
+    st.stop()
 
 
 @st.cache_resource(show_spinner="Preparing the database...")
@@ -118,6 +130,8 @@ menu = st.sidebar.radio(
     "Choose a module",
     MENUS[role]
 )
+
+st.sidebar.caption(privacy_link_markdown())
 
 if menu not in MENUS[role]:
     st.error("You do not have access to this page.")

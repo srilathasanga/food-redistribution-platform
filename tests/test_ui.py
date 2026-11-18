@@ -185,3 +185,18 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
     assign.click().run()
     assert not at.exception
     assert "Volunteer assigned successfully" in all_text(at)
+
+
+def test_privacy_page_is_public():
+    at = AppTest.from_file("app.py", default_timeout=30)
+    at.query_params["page"] = "privacy"
+    at.run()
+    assert not at.exception, at.exception
+    assert "Privacy policy" in [t.value for t in at.title]
+    assert "never sell" in all_text(at)
+    assert not at.sidebar.radio  # no login, no menu
+
+
+def test_login_screen_links_to_privacy_policy():
+    at = open_app()
+    assert "?page=privacy" in all_text(at)

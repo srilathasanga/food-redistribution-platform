@@ -14,6 +14,7 @@ Emails in ADMIN_EMAILS become admins automatically on first login.
 import streamlit as st
 
 from app.config import get_list_setting, get_setting
+from app.privacy import privacy_link_markdown
 from app.user_service import (
     SELF_SERVICE_ROLES,
     ensure_admin,
@@ -42,6 +43,10 @@ def _auth_mode():
     return None
 
 
+def privacy_footer():
+    st.caption(privacy_link_markdown())
+
+
 def logout_button():
     if st.sidebar.button("Log out"):
         if _auth_mode() == "google":
@@ -65,6 +70,7 @@ def _signed_in_email():
             )
             if st.button("Sign in with Google", type="primary"):
                 st.login()
+            privacy_footer()
             st.stop()
         return normalize_email(st.user.get("email")), st.user.get("name")
 
@@ -80,6 +86,7 @@ def _signed_in_email():
                 if st.form_submit_button("Sign in"):
                     st.session_state["dev_email"] = normalize_email(typed)
                     st.rerun()
+            privacy_footer()
             st.stop()
         return email, None
 
@@ -118,6 +125,7 @@ def _request_access_screen(email, name, existing):
                 st.rerun()
             except ValueError as error:
                 st.error(str(error))
+    privacy_footer()
     logout_button()
     st.stop()
 
