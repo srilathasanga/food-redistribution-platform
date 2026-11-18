@@ -5,3 +5,6 @@ __pycache__/
 .idea/
 .streamlit/secrets.toml
 .pytest_cache/
+
+# Personal notes (never commit)
+Info-Food-Dist-App.txt
