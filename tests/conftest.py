@@ -5,8 +5,13 @@ test empties all tables first. Point TEST_DATABASE_URL at it, e.g.
 
     TEST_DATABASE_URL=postgresql://postgres:secret@localhost:5432/food_test
 
-(A free Neon "branch" also works.) Tests are skipped if it is not set, so
-they can never wipe the real database by accident.
+(A free Neon "branch" also works.) Tests are skipped if it is not set.
+
+Before emptying anything, every test checks (tests/db_safety.py) that the
+live connection really is TEST_DATABASE_URL and NOT the real database in
+.streamlit/secrets.toml. If not, the whole test run stops.
+
+Tests marked @pytest.mark.no_database run without any database.
 """
 
 import os
@@ -27,13 +32,45 @@ TABLES = (
 )
 
 
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "no_database: test needs no database (always runs)"
+    )
+
+
+def _stop_unless_test_database(connection):
+    from tests.db_safety import (
+        live_target,
+        problem_with_target,
+        production_targets,
+    )
+
+    try:
+        problem = problem_with_target(
+            live_target(connection), TEST_DATABASE_URL, production_targets()
+        )
+    finally:
+        connection.close()
+    if problem:
+        pytest.exit(
+            f"STOPPED to protect real data: {problem} No table was emptied.",
+            returncode=3,
+        )
+
+
 @pytest.fixture(autouse=True)
-def clean_database():
+def clean_database(request):
+    if request.node.get_closest_marker("no_database"):
+        yield
+        return
     if not TEST_DATABASE_URL:
         pytest.skip("Set TEST_DATABASE_URL to run database tests.")
 
     from app.database import get_connection
     from app.schema import ensure_schema
+
+    # Safety check FIRST, before creating or emptying anything.
+    _stop_unless_test_database(get_connection())
 
     ensure_schema()
     connection = get_connection()
