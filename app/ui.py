@@ -343,3 +343,19 @@ def clock_time(value):
     if when.year != now_local().year:
         text = text.replace(",", f" {when.year},", 1)
     return text
+
+
+# ---------------------------------------------------------------- messages
+
+def flash_success(message):
+    """Show a green success message after the page refreshes with fresh
+    data. Say what happened AND what happens next."""
+    st.session_state["flash"] = message
+    st.rerun()
+
+
+def show_flash():
+    """Show the message saved by flash_success(), once."""
+    if "flash" in st.session_state:
+        st.success(st.session_state.pop("flash"),
+                   icon=":material/check_circle:")
