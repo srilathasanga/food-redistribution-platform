@@ -12,6 +12,7 @@ Building blocks:
     badge_markdown()     the same badge, for use inside st.markdown text
     empty_state()        "nothing here yet" + what to do next
     section_card()       a rounded card to group related things
+    centered_card()      a card in the middle of the page (sign-in)
     friendly_time()      "in 45 min", "2 hrs ago" (India time)
 """
 
@@ -156,6 +157,13 @@ def section_card(title=None, caption=None):
     if caption:
         box.caption(caption)
     return box
+
+
+def centered_card(width=560):
+    """A card in the middle of the page (sign-in screens). On a phone it
+    simply fills the screen width. Use with `with`."""
+    outer = st.container(horizontal_alignment="center")
+    return outer.container(border=True, width=width)
 
 
 # ---------------------------------------------------------------- time

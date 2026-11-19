@@ -78,10 +78,9 @@ def prepare_database():
 logger = logging.getLogger("food_app")
 
 
-def database_unavailable_screen(show_title=True):
+def database_unavailable_screen():
     """Friendly message instead of a Python traceback. Stops the page."""
-    if show_title:
-        st.title("🍲 Food Redistribution Platform")
+    st.title("🍲 Food Redistribution Platform")
     st.error(
         "We can't reach the app's database right now, so the app is "
         "paused. Your information is safe.",
@@ -126,14 +125,6 @@ def flash_success(message):
     st.rerun()
 
 
-st.title("🍲 Food Redistribution Platform")
-
-st.write(
-    "Connecting surplus food from restaurants "
-    "with verified organizations for redistribution."
-)
-
-
 # =========================================================
 # LOGIN
 # =========================================================
@@ -142,7 +133,7 @@ try:
     user = require_user()
 except psycopg2.Error:
     logger.exception("Database error while signing in")
-    database_unavailable_screen(show_title=False)
+    database_unavailable_screen()
 role = user["role"]
 is_admin = role == "ADMIN"
 
@@ -365,6 +356,12 @@ def available_food_page():
 def user_access_page():
 
     st.header("🔐 User Access")
+
+    st.info(
+        "New people must first be added as test users in Google Cloud → "
+        "Google Auth Platform → Audience → Test users.",
+        icon=":material/info:",
+    )
 
     st.subheader("Waiting for approval")
     pending_users = list_users(status="PENDING")

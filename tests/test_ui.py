@@ -84,10 +84,22 @@ def test_new_person_requests_access_and_waits():
     form_inputs["Phone"].set_value("9111111111")
     form_inputs["City"].set_value("Hyderabad")
     at.radio[0].set_value("DONOR")
-    at.button[0].click().run()
+    [send] = [b for b in at.button if b.label == "Send my request"]
+    send.click().run()
     assert not at.exception
     assert "waiting for an admin" in all_text(at)
     assert get_user("new@example.com")["status"] == "PENDING"
+    # On a phone the sidebar is hidden, so signing out is on the page.
+    assert [b for b in at.button if b.label.startswith("Sign out")]
+
+
+def test_request_access_asks_how_to_help():
+    at = open_app("unsure@example.com")
+    {t.label: t for t in at.text_input}["Your name"].set_value("Joy")
+    [send] = [b for b in at.button if b.label == "Send my request"]
+    send.click().run()
+    assert "Please choose how you would like to help." in all_text(at)
+    assert get_user("unsure@example.com") is None
 
 
 def test_admin_approves_from_user_access_page():

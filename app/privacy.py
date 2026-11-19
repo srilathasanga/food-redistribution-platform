@@ -15,14 +15,17 @@ PRIVACY_QUERY_VALUE = "privacy"
 # the app's address.
 PRIVACY_LINK = "?page=privacy"
 
+# Shown here and on the sign-in screen. Change it in this one place.
+MINISTRY_NAME = "Test Ministry"
+
 LAST_UPDATED = "19 November 2026"
 
 PRIVACY_POLICY = f"""
-**Test Ministry** · Food Redistribution Platform
+**{MINISTRY_NAME}** · Food Redistribution Platform
 
 *Last updated: {LAST_UPDATED}*
 
-This app is run by **Test Ministry**, a church food ministry. It
+This app is run by **{MINISTRY_NAME}**, a church food ministry. It
 connects surplus food from restaurants, caterers and families with
 verified organizations (homes, shelters, charities), and with volunteers
 who collect and deliver the food. This page explains, in plain words,
@@ -90,7 +93,7 @@ connections.
 You can ask to see the information we hold about you, to correct it, or
 to delete it. Please contact the ministry admin:
 
-- **Srilatha**, Test Ministry
+- **Srilatha**, {MINISTRY_NAME}
 - Email: [srilathasanga@gmail.com](mailto:srilathasanga@gmail.com)
 
 ### Changes to this policy
