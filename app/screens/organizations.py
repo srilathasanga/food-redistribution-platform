@@ -97,7 +97,8 @@ def my_organization_page(ctx):
     if organization:
         status, reason = organization[8], organization[10]
         with ui.card():
-            st.markdown(f"#### {organization[1]}")
+            ui.person_header(organization[1], [organization[6],
+                                               organization[7]])
             st.markdown(ui.badge_markdown(status))
             st.markdown(_organization_lines(organization))
         if status == "VERIFIED":
@@ -151,16 +152,24 @@ def organizations_page(ctx):
         icon=":material/groups:",
     )
 
+    # Came from Home > "Add organization": show the form first, open.
+    if ui.form_requested("organization"):
+        _add_organization(expanded=True)
+        add_form_shown = True
+    else:
+        add_form_shown = False
+
     # 1. The next action: organizations waiting to be checked.
     pending = ui.rows(get_pending_organizations_from_api(), "organizations")
-    st.subheader("Waiting for verification")
+    ui.section_title(f"Waiting for verification ({len(pending)})",
+                     ":material/hourglass_top:", "coral")
     if not pending:
         st.success("Nobody is waiting. All organizations are checked.",
                    icon=":material/task_alt:")
     for column, organization in ui.grid(pending):
         organization_id, name = organization[0], organization[1]
         with column, ui.card():
-            st.markdown(f"#### {name}")
+            ui.person_header(name, [organization[6], organization[7]])
             st.markdown(ui.badge_markdown("PENDING"))
             st.markdown(_organization_lines(organization))
             col1, col2 = st.columns(2)
@@ -200,22 +209,30 @@ def organizations_page(ctx):
     # 2. Everyone already verified.
     verified = ui.rows(get_verified_organizations_from_api(),
                        "organizations")
-    st.subheader(ui.plural(len(verified), "verified organization"))
+    ui.section_title(ui.plural(len(verified), "verified organization"),
+                     ":material/verified:", "green")
     if not verified:
         ui.empty_state(
             "No verified organizations yet",
-            icon=":material/groups:",
+            icon=":material/groups:", image="empty-people",
             hint="Organizations sign up themselves, or you can add one "
                  "below. Verify them above.",
         )
     for column, organization in ui.grid(verified):
         with column, ui.card():
-            st.markdown(f"#### {organization[1]}")
+            ui.person_header(organization[1], [organization[6],
+                                               organization[7]])
             st.markdown(ui.badge_markdown("VERIFIED"))
             st.markdown(_organization_lines(organization))
 
     # 3. Add one on someone's behalf (rarely needed).
-    with st.expander("Add an organization", icon=":material/add_business:"):
+    if not add_form_shown:
+        _add_organization(expanded=False)
+
+
+def _add_organization(expanded):
+    with st.expander("Add an organization", icon=":material/add_business:",
+                     expanded=expanded):
         details = _organization_form("organization_form",
                                      "Add organization")
         if details:

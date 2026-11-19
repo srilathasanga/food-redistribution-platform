@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Bowl with a heart">
+  <circle cx="32" cy="32" r="32" fill="#FF6B6B"/>
+  <path d="M32 27c-4-4-10-5-10-9.5 0-3 2.5-5 5-5 2 0 4 1.5 5 3 1-1.5 3-3 5-3 2.5 0 5 2 5 5 0 4.5-6 5.5-10 9.5z" fill="#364FC7"/>
+  <path d="M14 33h36a18 15 0 0 1-36 0z" fill="#FFFFFF"/>
+  <rect x="12" y="30" width="40" height="5" rx="2.5" fill="#FFFFFF"/>
+  <rect x="24" y="49" width="16" height="4" rx="2" fill="#FFFFFF"/>
+</svg>

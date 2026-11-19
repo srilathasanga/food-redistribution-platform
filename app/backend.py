@@ -31,7 +31,11 @@ from decimal import Decimal
 import streamlit as st
 
 from app import user_service
-from app.dashboard_service import get_admin_home_counts, get_urgent_food
+from app.dashboard_service import (
+    get_admin_home_counts,
+    get_impact_summary,
+    get_urgent_food,
+)
 from app.donation_service import (
     add_food_donation,
     get_available_donations,
@@ -281,6 +285,16 @@ def _admin_home_counts():
 def get_admin_home_counts_from_api():
     """All of the admin Home numbers in one database query."""
     return _safe(_admin_home_counts)
+
+
+@_cached()
+def _impact(month_start):
+    return _plain(get_impact_summary(month_start))
+
+
+def get_impact_from_api(month_start):
+    """Ministry-wide totals for the Home impact strip (not per person)."""
+    return _safe(lambda: _impact(month_start))
 
 
 @_cached()

@@ -75,7 +75,13 @@ orangeTextColor = "#F03E3E"
 chartCategoricalColors = ["#364FC7", "#F03E3E", "#2B8A3E", "#0CA678", "#7048E8", "#F59F00"]
 
 [theme.sidebar]
-backgroundColor = "#EDF2FF"
-secondaryBackgroundColor = "#DBE4FF"
-textColor = "#1F2A37"
+# Dark navy sidebar; app/ui.py adds the #1E2A78 -> #2B3FA0 gradient.
+# White text on it is 6.3:1 or better everywhere.
+backgroundColor = "#1E2A78"
+secondaryBackgroundColor = "#2B3FA0"
+textColor = "#FFFFFF"
 headingFontSizes = ["24px", "20px", "18px", "17px", "16px", "15px"]
+
+[client]
+# Hide developer clutter (Deploy button, developer menu) for users.
+toolbarMode = "minimal"

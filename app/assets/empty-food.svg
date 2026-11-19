@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="An empty plate">
+  <circle cx="120" cy="84" r="66" fill="#EDF2FF"/>
+  <path d="M42 40v18a9 9 0 0 0 18 0V40M51 40v84" stroke="#364FC7" stroke-width="5" fill="none" stroke-linecap="round"/>
+  <ellipse cx="192" cy="52" rx="9" ry="13" fill="#364FC7"/>
+  <rect x="189" y="60" width="6" height="64" rx="3" fill="#364FC7"/>
+  <ellipse cx="120" cy="96" rx="56" ry="20" fill="#DBE4FF"/>
+  <ellipse cx="120" cy="92" rx="56" ry="20" fill="#FFFFFF" stroke="#BAC8FF" stroke-width="3"/>
+  <ellipse cx="120" cy="92" rx="34" ry="11" fill="none" stroke="#DBE4FF" stroke-width="3"/>
+  <path d="M120 66c-6-5-11-8-11-12 0-4 3-6 6-6 2 0 4 1 5 3 1-2 3-3 5-3 3 0 6 2 6 6 0 4-5 7-11 12z" fill="#FF6B6B"/>
+</svg>

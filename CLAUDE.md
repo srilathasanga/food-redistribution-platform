@@ -20,7 +20,9 @@ prepared for a small ministry pilot.
   `ctx.my_restaurant`, `ctx.my_organization`, `ctx.pages` for links).
   `app/home_pages.py`: the Home page per role, plus shared cards (food
   card + request pop-up, pickup line, volunteer card).
-- `app/ui.py`: the shared look: `page_header`, `card`, `stat_card`,
+- `app/ui.py`: the shared look: `page_header`, `card`, `stat_card` /
+  `stat_row` (4 in a row, 2x2 on phones), `checklist`, `quick_actions`
+  (+ `form_requested`: the target page opens that form),
   `grid` (row by row, keeps order on phones), `badge_markdown` /
   `pickup_status`, `empty_state`, `status_chart`, `friendly_time`,
   `flash_success`, `rows`, `amount`, `plural`. ALL custom CSS lives here.
@@ -116,6 +118,13 @@ page.
   lists as cards (`ui.card`, `ui.grid`) with `ui.badge_markdown` status
   badges (words + icon, never colour alone); use `ui.empty_state` for
   empty lists; plain words, no raw IDs or status codes.
+- Colour balance: only ONE strong gradient block per page (the Home
+  impact strip, shown once the first delivery is done; before that the
+  admin sees a light "Getting started" checklist). Banners, cards and
+  stat cards stay light; colour comes from icons, badges and stripes.
+  The sidebar is the only dark area.
+- Design is FROZEN for go-live (2026-11-19): fix bugs and contrast only;
+  new visual ideas wait until after the pilot.
 - Accessibility: every text/background pair WCAG AA (4.5:1); coral is
   never behind white text; nothing under 15px; tap targets >= 24px
   (aim for 40px+). Check at 390px wide: no sideways scrolling.
@@ -129,7 +138,9 @@ page.
   public privacy page, friendly database-error screen, test-safety guard.
 - Phase 3 (design): royal blue + coral theme, role home pages, menu with
   st.navigation, friendly sign-in, forms and card lists, admin pages
-  grouped by next action, Volunteers page, phone and accessibility pass.
+  grouped by next action, Volunteers page, phone and accessibility pass;
+  warmer look (illustrations, avatars, pickup tracker), dark navy
+  sidebar with count badges, light banners, admin Home quick actions.
 
 ## Next
 

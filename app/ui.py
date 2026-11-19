@@ -20,8 +20,14 @@ Building blocks:
     friendly_time()      "in 45 min", "2 hrs ago" (India time)
 """
 
+import base64
+import functools
+import html
+import re
+import zlib
 from datetime import datetime
 from itertools import count
+from pathlib import Path
 
 import streamlit as st
 
@@ -149,43 +155,182 @@ _CSS = """
 }
 [class*="st-key-card-"]:hover, [class*="st-key-tone-"]:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(54, 79, 199, .12);
+    box-shadow: 0 12px 28px rgba(54, 79, 199, .18);
 }
 
-/* Stat cards: each in its own soft colour, with a coral accent stripe
-   and coral icon (#F03E3E passes 3:1 on every tint). */
-[class*="st-key-tone-"] { box-shadow: inset 0 4px 0 #FF6B6B,
-                                      0 2px 10px rgba(31, 42, 55, .06); }
-[class*="st-key-tone-royal"]  { background: #EDF2FF; }
-[class*="st-key-tone-green"]  { background: #EBFBEE; }
-[class*="st-key-tone-teal"]   { background: #E6FCF5; }
-[class*="st-key-tone-purple"] { background: #F3F0FF; }
-[class*="st-key-tone-coral"]  { background: #FFF0F0; }
-[class*="st-key-tone-"] [data-testid="stMetricLabel"] span[role="img"] {
-    color: #F03E3E;
+/* Stat cards: WHITE, so colour comes only from each card's own top
+   stripe and icon circle. Rule of thumb: one strong gradient block per
+   page (the Home impact strip); everything else light. */
+[class*="st-key-tone-"] {
+    background: #FFFFFF;
+    --stripe: #364FC7;
+    box-shadow: inset 0 4px 0 var(--stripe), 0 2px 10px rgba(31, 42, 55, .06);
+}
+[class*="st-key-tone-"]:hover {
+    box-shadow: inset 0 4px 0 var(--stripe), 0 12px 28px rgba(54, 79, 199, .18);
+}
+[class*="st-key-tone-royal"]  { --stripe: #364FC7; }
+[class*="st-key-tone-green"]  { --stripe: #2B8A3E; }
+[class*="st-key-tone-teal"]   { --stripe: #0CA678; }
+[class*="st-key-tone-purple"] { --stripe: #7048E8; }
+[class*="st-key-tone-coral"]  { --stripe: #FF6B6B; }
+[class*="st-key-tone-red"]    { --stripe: #E03131; }
+[class*="st-key-tone-amber"]  { --stripe: #F59F00; }
+
+/* Stat cards (stat_card): compact. Icon + label on one line, the number
+   big and bold below in the card's own colour (all 5.4:1 or more on
+   white), then a short hint and link. */
+[class*="-stat-"] { padding: .8rem .9rem .55rem; gap: .2rem; }
+[class*="-stat-"] [data-testid="stMetricLabel"] p { font-size: 16px; }
+[class*="-stat-"] [data-testid="stMetricLabel"] span[role="img"] {
+    width: 1.9em; height: 1.9em; line-height: 1.9em; margin-right: .35em;
+}
+[class*="-stat-"] [data-testid="stMetricValue"],
+[class*="-stat-"] [data-testid="stMetricValue"] * {
+    font-family: "Poppins", sans-serif; font-weight: 700;
+    font-size: 2.1rem; line-height: 1.15; color: var(--number, #364FC7);
+}
+/* Labels wrap instead of being cut off ("Food availa..."). */
+[class*="-stat-"] [data-testid="stMetricLabel"],
+[class*="-stat-"] [data-testid="stMetricLabel"] * {
+    white-space: normal; overflow: visible; text-overflow: clip;
+}
+[class*="-stat-"] [data-testid="stCaptionContainer"] p {
+    margin: 0 0 .25rem; line-height: 1.35;
+}
+[class*="-stat-"] .stPageLink a { min-height: 2.5rem; padding-left: 0; }
+/* Cards in one row are the same height. */
+[class*="st-key-statrow"] [data-testid="stColumn"] [data-testid="stLayoutWrapper"] {
+    flex: 1 1 auto;
+}
+[class*="st-key-statrow"] [class*="-stat-"] { height: 100%; }
+/* The hint and link sit at the bottom of the card. */
+[class*="-stat-"] > :nth-child(2) { margin-top: auto; }
+[class*="st-key-tone-green-stat"]  { --number: #237032; }
+[class*="st-key-tone-red-stat"]    { --number: #C92A2A; }
+[class*="st-key-tone-amber-stat"]  { --number: #9C5400; }
+[class*="st-key-tone-purple-stat"] { --number: #6741D9; }
+[class*="st-key-tone-teal-stat"]   { --number: #0B7A5B; }
+[class*="st-key-tone-coral-stat"]  { --number: #C92A2A; }
+
+/* Quick actions (admin Home): small outlined pill buttons. */
+[class*="st-key-quick-actions"] { flex-wrap: wrap; gap: .5rem; }
+[class*="st-key-quick-actions"] .stButton button {
+    min-height: 2.5rem; border-radius: 999px; padding: .2rem 1rem;
+    background: #FFFFFF; border: 1.5px solid #364FC7;
+}
+[class*="st-key-quick-actions"] .stButton button * {
+    color: #2B3FA0; font-size: 16px;
+}
+[class*="st-key-quick-actions"] .stButton button:hover {
+    background: #EDF2FF;
 }
 
-/* Page banner: royal-blue gradient (never lighter, so white text passes),
-   white title and text, light-coral icon and a coral stripe. */
+/* Getting started checklist (admin Home, before the first delivery).
+   Ticks green (6.1:1), the next step highlighted, words always shown. */
+.fr-progress {
+    height: 10px; border-radius: 999px; background: #E9ECEF;
+    overflow: hidden; margin: .1rem 0 .3rem;
+}
+.fr-progress > div { height: 100%; border-radius: 999px; background: #364FC7; }
+[class*="st-key-step-done"] [data-testid="stIconMaterial"] {
+    color: #237032 !important;
+}
+[class*="st-key-step-next"] .stPageLink a {
+    background: #EDF2FF; border-radius: 10px;
+}
+[class*="st-key-step-next"] .stPageLink a p { font-weight: 700; }
+[class*="st-key-step-next"] [data-testid="stIconMaterial"] {
+    color: #C92A2A !important;
+}
+
+/* Page banner: LIGHT. White to very light lavender with a faint coral
+   tint at the far right, dark slate text (13:1), royal-blue icon (6:1),
+   thin coral stripe, soft shadow. */
 [class*="st-key-banner-"] {
-    background: linear-gradient(135deg, #364FC7 0%, #3B5BDB 100%);
+    background: linear-gradient(100deg, #FFFFFF 0%, #EEF2FF 72%, #FFF0F0 100%);
     border-radius: 20px;
-    padding: 1.1rem 1.4rem 1.1rem 1.6rem;
+    padding: 1rem 1.4rem 1rem 1.6rem;
     margin-bottom: .5rem;
-    box-shadow: inset 6px 0 0 #FF6B6B;
+    box-shadow: inset 4px 0 0 #FF6B6B, 0 4px 18px rgba(31, 42, 55, .07);
 }
 [class*="st-key-banner-"] h1 { padding: 0; }
-[class*="st-key-banner-"], [class*="st-key-banner-"] * { color: #FFFFFF; }
-[class*="st-key-banner-"] span[role="img"] { color: #FFA8A8; }
+[class*="st-key-banner-"], [class*="st-key-banner-"] * { color: #1F2A37; }
+[class*="st-key-banner-"] span[role="img"] { color: #364FC7; }
 
-/* Sidebar menu: selected page royal blue with white text; hover #DBE4FF. */
-[data-testid="stSidebarNavLink"] { border-radius: 12px; }
-[data-testid="stSidebarNavLink"]:hover { background: #DBE4FF; }
+/* ---- Sidebar: dark navy dashboard menu ------------------------------
+   Contrast on the LIGHTER end of the gradient (#2B3FA0, worst case):
+   menu text white 85% 7.0:1, selected 6.3:1, labels #BAC8FF 5.5:1,
+   coral pill text 5.2:1, light-coral selected bar #FFA8A8 3.4:1. */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #1E2A78 0%, #2B3FA0 100%);
+}
+/* Profile card at the bottom: the content becomes a column. */
+[data-testid="stSidebarContent"] {
+    display: flex; flex-direction: column; min-height: 100%;
+}
+[data-testid="stSidebarUserContent"] {
+    margin-top: auto; padding-bottom: 1.5rem;
+}
+
+/* Menu links: white at 85%, hover = faint white overlay. */
+[data-testid="stSidebarNavLink"] {
+    border-radius: 10px; color: rgba(255, 255, 255, .85);
+}
+[data-testid="stSidebarNavLink"] * { color: rgba(255, 255, 255, .85); }
+[data-testid="stSidebarNavLink"]:hover {
+    background: rgba(255, 255, 255, .08);
+}
+[data-testid="stSidebarNavLink"]:hover * { color: #FFFFFF; }
+/* Selected page: faint white highlight, light-coral bar on the left,
+   white bold text. */
 [data-testid="stSidebarNavLink"][aria-current="page"],
 [data-testid="stSidebarNavLink"][aria-current="page"]:hover {
-    background: #364FC7;
+    background: rgba(255, 255, 255, .14);
+    box-shadow: inset 4px 0 0 #FFA8A8;
 }
-[data-testid="stSidebarNavLink"][aria-current="page"] * { color: #FFFFFF; }
+[data-testid="stSidebarNavLink"][aria-current="page"] * {
+    color: #FFFFFF; font-weight: 700;
+}
+/* Section labels (Food, People, Ministry). */
+[data-testid="stNavSectionHeader"] {
+    margin-top: 1.1rem; text-transform: uppercase;
+    letter-spacing: .08em; font-size: 14px; font-weight: 700;
+}
+[data-testid="stNavSectionHeader"] * { color: #BAC8FF; font-size: 14px; }
+/* Dividers: white at low opacity. The profile card has its own line,
+   so Streamlit's line under the menu is not needed. */
+[data-testid="stSidebarNavSeparator"] { display: none; }
+[data-testid="stSidebar"] hr { border-color: rgba(255, 255, 255, .2); }
+/* Brand: bigger logo, ministry name and tagline (see brand()). */
+[data-testid="stSidebarHeader"] { height: auto; min-height: 4.5rem; }
+
+/* Profile card. */
+.fr-profile { display: flex; gap: .7rem; align-items: center; }
+.fr-profile .fr-avatar { width: 42px; height: 42px; font-size: 16px; }
+.fr-profile-name {
+    font-family: "Poppins", sans-serif; font-weight: 600; font-size: 16px;
+    color: #FFFFFF; line-height: 1.3;
+}
+.fr-profile-role {
+    display: inline-block; margin-top: .2rem; padding: .05rem .6rem;
+    border-radius: 999px; background: rgba(255, 255, 255, .14);
+    color: #FFFFFF; font-size: 15px;
+}
+[class*="st-key-profile"] {
+    border-top: 1px solid rgba(255, 255, 255, .2); padding-top: .9rem;
+}
+[class*="st-key-profile"] .stButton button {
+    background: transparent; border: 1px solid rgba(255, 255, 255, .35);
+    min-height: 2.5rem;
+}
+[class*="st-key-profile"] .stButton button:hover {
+    background: rgba(255, 255, 255, .08); box-shadow: none;
+}
+[class*="st-key-profile"] .stButton button * { color: #FFFFFF; }
+[class*="st-key-profile"] [data-testid="stCaptionContainer"] a {
+    color: #BAC8FF;
+}
 
 /* Small things people tap: the "?" help icons and caption links. */
 [data-testid="stTooltipIcon"] button, [data-testid="stTooltipIcon"] > div {
@@ -195,14 +340,183 @@ _CSS = """
 [data-testid="stCaptionContainer"] a { display: inline-block; padding: 12px 0; }
 [data-testid="stRadio"] label { min-height: 40px; align-items: center; }
 
+/* Page background: a soft blue glow at the top, behind everything.
+   Its darkest point (#E7EDFF) still gives text 12:1 and links 5.8:1. */
+[data-testid="stApp"] {
+    background: linear-gradient(180deg, #E7EDFF 0, #F8F9FF 380px) fixed;
+}
+[data-testid="stHeader"] { background: transparent; }
+
+/* Icons in soft tinted circles: stat cards, section titles, card titles.
+   Each icon colour passes 3:1 on its circle. */
+[class*="st-key-tone-"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-"] h3 span[role="img"],
+[class*="st-key-ctitle-"] h4 span[role="img"] {
+    /* Streamlit sets inline display/vertical-align on icons, so centre
+       the glyph with line-height and override the alignment. */
+    width: 2.1em; height: 2.1em; line-height: 2.1em; text-align: center;
+    border-radius: 50%; margin-right: .45em;
+    vertical-align: middle !important;
+}
+[class*="st-key-tone-royal"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-blue"] h3 span[role="img"],
+[class*="st-key-ctitle-blue"] h4 span[role="img"] {
+    background: #DBE4FF; color: #364FC7;
+}
+[class*="st-key-tone-coral"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-coral"] h3 span[role="img"],
+[class*="st-key-ctitle-coral"] h4 span[role="img"] {
+    background: #FFE3E3; color: #E03131;
+}
+[class*="st-key-tone-green"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-green"] h3 span[role="img"],
+[class*="st-key-ctitle-green"] h4 span[role="img"] {
+    background: #D3F9D8; color: #2B8A3E;
+}
+[class*="st-key-tone-purple"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-purple"] h3 span[role="img"],
+[class*="st-key-ctitle-purple"] h4 span[role="img"] {
+    background: #E5DBFF; color: #6741D9;
+}
+[class*="st-key-tone-red"] [data-testid="stMetricLabel"] span[role="img"] {
+    background: #FFE3E3; color: #E03131;
+}
+[class*="st-key-tone-amber"] [data-testid="stMetricLabel"] span[role="img"] {
+    background: #FFF3BF; color: #9C5400;
+}
+[class*="st-key-tone-teal"] [data-testid="stMetricLabel"] span[role="img"],
+[class*="st-key-section-teal"] h3 span[role="img"],
+[class*="st-key-ctitle-teal"] h4 span[role="img"] {
+    background: #C3FAE8; color: #0B7A5B;
+}
+
+/* Section titles: a short coral underline. */
+[class*="st-key-section-"] h3 { padding-bottom: .2rem; }
+[class*="st-key-section-"] h3::after {
+    content: ""; display: block; width: 56px; height: 4px;
+    margin-top: .5rem; border-radius: 2px; background: #FF6B6B;
+}
+
+/* Brand at the top of the sidebar: logo mark (+ name, see brand()). */
+[data-testid="stSidebarHeader"] { align-items: center; }
+[data-testid="stSidebarLogo"] { height: 2.6rem; width: auto; }
+
+/* Illustrations: centred, never wider than the screen. */
+.fr-illustration { max-width: 100%; margin: 0 auto; }
+.fr-illustration img { display: block; width: 100%; height: auto; }
+
+/* People and organizations: initials avatar, name and small chips. */
+.fr-person { display: flex; gap: .8rem; align-items: center; }
+.fr-avatar {
+    flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Poppins", sans-serif; font-weight: 700; font-size: 18px;
+}
+.fr-name {
+    font-family: "Poppins", sans-serif; font-weight: 700; font-size: 19px;
+    color: #1F2A37; line-height: 1.3;
+}
+.fr-chips { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .3rem; }
+.fr-chip {
+    background: #EDF2FF; color: #1F2A37; border-radius: 999px;
+    padding: .1rem .7rem; font-size: 15px;
+}
+
+/* Pickup progress: done steps blue, the current step coral. */
+.fr-track { display: flex; list-style: none; margin: .5rem 0 .3rem; padding: 0; }
+.fr-step {
+    flex: 1; position: relative; display: flex; flex-direction: column;
+    align-items: center; text-align: center; font-size: 15px;
+    color: #4B5563; line-height: 1.2;
+}
+.fr-step::before {
+    content: ""; position: absolute; top: 12px; right: 50%; width: 100%;
+    height: 4px; background: #DEE2E6; z-index: 0;
+}
+.fr-step:first-child::before { display: none; }
+.fr-step.done::before, .fr-step.current::before { background: #364FC7; }
+.fr-dot {
+    position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid #868E96; background: #FFFFFF; color: #4B5563;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 700; box-sizing: border-box;
+}
+.fr-step.done .fr-dot { background: #364FC7; border-color: #364FC7; color: #FFFFFF; }
+.fr-step.current .fr-dot {
+    background: #F03E3E; border-color: #F03E3E; color: #FFFFFF;
+    box-shadow: 0 0 0 5px #FFE3E3;
+}
+.fr-step.current { color: #1F2A37; font-weight: 700; }
+.fr-label { margin-top: .4rem; }
+
+/* Impact strip: the ONE vivid block on the page. Diagonal royal blue ->
+   indigo -> violet, with a faint shine in the top-right corner.
+   Worst case (violet end under the shine): white 5.4:1, labels 4.8:1.
+   (The violet end is #6741D9, a touch deeper than #7048E8, so the labels
+   pass AA everywhere.) */
+.fr-impact {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(255, 255, 255, .08) 0,
+                        rgba(255, 255, 255, 0) 240px),
+        linear-gradient(135deg, #364FC7 0%, #4C3BCF 55%, #6741D9 100%);
+    border-radius: 18px; padding: 1.2rem 1.4rem 1.4rem; color: #FFFFFF;
+    box-shadow: 0 10px 28px rgba(76, 59, 207, .35);
+}
+.fr-impact-line {
+    font-family: "Poppins", sans-serif; font-weight: 600; font-size: 20px;
+    margin: 0 0 .9rem;
+}
+.fr-impact-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: .8rem;
+}
+.fr-num {
+    font-family: "Poppins", sans-serif; font-weight: 700; font-size: 34px;
+    line-height: 1.1; animation: fr-pop .7s ease-out both;
+}
+.fr-stat:nth-child(2) .fr-num { animation-delay: .1s; }
+.fr-stat:nth-child(3) .fr-num { animation-delay: .2s; }
+.fr-stat:nth-child(4) .fr-num { animation-delay: .3s; }
+.fr-num-label { font-size: 15px; color: #F3F0FF; }
+@keyframes fr-pop {
+    from { opacity: 0; transform: translateY(8px) scale(.9); }
+    to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fr-num { animation: none; }
+    [class*="st-key-card-"], [class*="st-key-tone-"] { transition: none; }
+}
+
+/* Less empty space above the first banner (Streamlit's default is
+   6rem). Phones keep room for the menu button at the top. */
+[data-testid="stMainBlockContainer"] { padding-top: 2.5rem; }
+
 /* Phones: use the full width, keep a small margin. */
 @media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] {
-        padding: 4.5rem 1rem 2rem 1rem;
+        padding: 3.75rem 1rem 2rem 1rem;
     }
+    .fr-impact-grid { grid-template-columns: repeat(2, 1fr); }
+    /* Stat cards: two per row instead of one long column. */
+    [class*="st-key-statrow"] [data-testid="stHorizontalBlock"] {
+        flex-wrap: wrap; gap: .6rem;
+    }
+    [class*="st-key-statrow"] [data-testid="stColumn"] {
+        flex: 1 1 calc(50% - .3rem) !important;
+        width: calc(50% - .3rem) !important;
+        min-width: calc(50% - .3rem) !important;
+    }
+    [class*="-stat-"] { padding: .7rem .7rem .45rem; }
+    [class*="-stat-"] [data-testid="stMetricLabel"] p { font-size: 15px; }
+    [class*="-stat-"] [data-testid="stMetricValue"],
+    [class*="-stat-"] [data-testid="stMetricValue"] * { font-size: 1.8rem; }
+    /* The banner picture is decoration: hide it on small screens. */
+    [class*="st-key-banner-"] .fr-illustration { display: none; }
 }
 </style>
 """
+
+# Pictures (simple flat SVGs, royal blue with coral accents).
+ASSETS = Path(__file__).resolve().parent / "assets"
 
 # Card keys must be unique within one run; restarted by apply_style().
 _counter = count()
@@ -221,12 +535,232 @@ def apply_style():
 
 # ---------------------------------------------------------------- pieces
 
-def page_header(title, purpose, icon=None):
+def page_header(title, purpose, icon=None, image=None):
     """Warm banner at the top of a page: icon, title, and one plain line
-    saying what this page is for."""
+    saying what this page is for. `image` adds an illustration on the
+    right (hidden on phones)."""
     with st.container(key=_key("banner")):
-        st.title(f"{icon} {title}" if icon else title)
-        st.markdown(purpose)
+        if image:
+            text, picture = st.columns([5, 2], vertical_alignment="center")
+            with picture:
+                illustration(image, width=190)
+        else:
+            text = st.container()
+        with text:
+            st.title(f"{icon} {title}" if icon else title)
+            st.markdown(purpose)
+
+
+def _css_text(text):
+    """Text that is safe inside a CSS content: "..." string."""
+    return "".join(ch for ch in str(text) if ch not in '\\"<>{}')
+
+
+def brand(ministry_name, tagline):
+    """Logo mark, ministry name and a one-line tagline at the top of the
+    sidebar. The logo is Streamlit's st.logo; the name and tagline are
+    drawn next to it with CSS (a grid: logo | name / tagline)."""
+    st.logo(str(ASSETS / "logo-mark.svg"), size="large",
+            icon_image=str(ASSETS / "logo-mark.svg"))
+    logo = '[data-testid="stSidebarHeader"] > :first-child'
+    st.html(
+        "<style>"
+        # The logo is a plain box on Home and a "go to Home" link on
+        # other pages, so target whichever comes first.
+        f"{logo} {{ display: grid; grid-template-columns: auto 1fr;"
+        "column-gap: .7rem; align-items: center; text-align: left; }"
+        f"{logo} img {{ grid-row: 1 / span 2; height: 3rem; width: 3rem;"
+        "max-width: none; }"
+        f'{logo}::after {{ content: "{_css_text(ministry_name)}";'
+        "grid-column: 2; grid-row: 1; align-self: end;"
+        'font-family: "Poppins", sans-serif; font-weight: 600;'
+        "font-size: 18px; color: #FFFFFF; white-space: nowrap; }"
+        f'{logo}::before {{ content: "{_css_text(tagline)}";'
+        "grid-column: 2; grid-row: 2; align-self: start;"
+        "font-size: 14px; color: #BAC8FF; white-space: nowrap; }"
+        "</style>"
+    )
+
+
+def nav_badges(counts):
+    """Small coral count pills on menu items, e.g. {"pickups": 3}.
+    Only counts above zero are shown. Menu links are found by the end of
+    their address (…/pickups), which Streamlit builds from url_path."""
+    rules = []
+    for path, number in counts.items():
+        if number and number > 0:
+            rules.append(
+                f'[data-testid="stSidebarNavLink"][href$="/{_css_text(path)}"]'
+                f'::after {{ content: "{int(number)}"; margin-left: auto;'
+                "background: #FF6B6B; color: #1F2A37; border-radius: 999px;"
+                "padding: 0 .55rem; font-size: 15px; font-weight: 700;"
+                "line-height: 1.6; }"
+            )
+    if rules:
+        st.html("<style>" + "".join(rules) + "</style>")
+
+
+def profile_html(name, role_words):
+    """The signed-in person at the bottom of the sidebar."""
+    background, colour = avatar_colours(name)
+    return (
+        '<div class="fr-profile">'
+        f'<div class="fr-avatar" style="background:{background};'
+        f'color:{colour}" aria-hidden="true">{html.escape(initials(name))}'
+        "</div>"
+        f'<div><div class="fr-profile-name">{html.escape(str(name))}</div>'
+        f'<span class="fr-profile-role">{html.escape(role_words)}</span>'
+        "</div></div>"
+    )
+
+
+@functools.lru_cache(maxsize=None)
+def _picture(name):
+    """(data URI, description) for an SVG in app/assets."""
+    svg = (ASSETS / f"{name}.svg").read_text(encoding="utf-8")
+    found = re.search(r'aria-label="([^"]*)"', svg)
+    data = base64.b64encode(svg.encode("utf-8")).decode("ascii")
+    return f"data:image/svg+xml;base64,{data}", found.group(1) if found else ""
+
+
+def illustration(name, width=220):
+    """One of the pictures in app/assets (e.g. "welcome", "empty-food").
+    Shown as a plain <img> (not st.image), so a decorative picture gets no
+    "fullscreen" button. The alt text comes from the SVG's aria-label."""
+    source, description = _picture(name)
+    st.html(f'<div class="fr-illustration" style="width:{int(width)}px">'
+            f'<img src="{source}" alt="{html.escape(description)}"></div>')
+
+
+def section_title(text, icon=None, tone="blue"):
+    """A section title with its icon in a tinted circle and a short coral
+    underline. tone: blue, coral, green, purple or teal."""
+    with st.container(key=_key(f"section-{tone}")):
+        st.subheader(f"{icon} {text}" if icon else text)
+
+
+def card_title(text, icon, tone="blue"):
+    """A card's title with its icon in a tinted circle."""
+    with st.container(key=_key(f"ctitle-{tone}")):
+        st.markdown(f"#### {icon} {text}")
+
+
+# Soft avatar colours (background, initials). All pass AA (5.7:1 or more).
+AVATAR_COLOURS = [
+    ("#DBE4FF", "#2B3FA0"), ("#FFE3E3", "#A51D1D"), ("#D3F9D8", "#1E6B2F"),
+    ("#E5DBFF", "#4A2BB0"), ("#C3FAE8", "#0B5D50"), ("#FFEC99", "#7A4A00"),
+]
+
+
+def initials(name):
+    words = ["".join(ch for ch in word if ch.isalnum())
+             for word in str(name or "").split()]
+    letters = "".join(word[0] for word in words if word)[:2].upper()
+    return letters or "?"
+
+
+def avatar_colours(name):
+    """The same name always gets the same soft colour."""
+    index = zlib.crc32(str(name or "").lower().encode()) % len(AVATAR_COLOURS)
+    return AVATAR_COLOURS[index]
+
+
+def person_html(name, chips=()):
+    """Avatar with initials, the name in bold, and small chips (city, type)."""
+    background, colour = avatar_colours(name)
+    chip_html = "".join(f'<span class="fr-chip">{html.escape(str(c))}</span>'
+                        for c in chips if c)
+    return (
+        '<div class="fr-person">'
+        f'<div class="fr-avatar" style="background:{background};'
+        f'color:{colour}" aria-hidden="true">{html.escape(initials(name))}'
+        "</div>"
+        f'<div><div class="fr-name">{html.escape(str(name or ""))}</div>'
+        + (f'<div class="fr-chips">{chip_html}</div>' if chip_html else "")
+        + "</div></div>"
+    )
+
+
+def person_header(name, chips=()):
+    st.html(person_html(name, chips))
+
+
+PICKUP_STEPS = [("REQUESTED", "Requested"), ("ACCEPTED", "Accepted"),
+                ("PICKED_UP", "Picked up"), ("DELIVERED", "Delivered")]
+
+
+def tracker_html(status):
+    """Requested -> Accepted -> Picked up -> Delivered: done steps blue, the
+    current step coral. Words are always shown (not colour alone)."""
+    codes = [code for code, _ in PICKUP_STEPS]
+    if status not in codes:
+        return ""
+    now_at = codes.index(status)
+    finished = status == "DELIVERED"
+    items = []
+    for number, (code, words) in enumerate(PICKUP_STEPS):
+        if finished or number < now_at:
+            state, mark = "done", "\u2713"
+        elif number == now_at:
+            state, mark = "current", str(number + 1)
+        else:
+            state, mark = "todo", str(number + 1)
+        items.append(f'<li class="fr-step {state}"><span class="fr-dot">'
+                     f'{mark}</span><span class="fr-label">{words}</span></li>')
+    label = ("Delivered: all 4 steps done" if finished else
+             f"Step {now_at + 1} of 4: {PICKUP_STEPS[now_at][1]}")
+    return (f'<ol class="fr-track" aria-label="{label}">'
+            + "".join(items) + "</ol>")
+
+
+def pickup_tracker(status):
+    markup = tracker_html(status)
+    if markup:
+        st.html(markup)
+
+
+def _number(value):
+    value = float(value or 0)
+    return f"{int(value):,}" if value.is_integer() else f"{value:,.1f}"
+
+
+def impact_html(impact):
+    """The Home impact strip: big numbers and one encouraging line."""
+    kg = float(impact.get("kg_this_month") or 0)
+    donations = int(impact.get("donations_this_month") or 0)
+    deliveries = int(impact.get("deliveries") or 0)
+    if kg:
+        line = f"Together we shared {_number(kg)} kg of food this month."
+    elif donations:
+        line = (f"Together we shared {plural(donations, 'donation')} "
+                "this month.")
+    elif deliveries:
+        line = "Every delivery so far reached people in need. Thank you!"
+    else:
+        line = "Your first delivery will appear here."
+    stats = [
+        (_number(kg), "kg shared this month"),
+        (_number(deliveries), "deliveries completed"),
+        (_number(impact.get("kitchens")), "partner kitchens"),
+        (_number(impact.get("volunteers")), "volunteers"),
+    ]
+    if all(n == "0" for n, _ in stats):
+        # Nothing yet: just the encouraging line, not a row of zeros.
+        return (f'<div class="fr-impact"><p class="fr-impact-line">'
+                f'{html.escape(line)}</p><p class="fr-num-label">'
+                "Every meal shared will be counted here.</p></div>")
+    cells = "".join(
+        f'<div class="fr-stat"><div class="fr-num">{html.escape(n)}</div>'
+        f'<div class="fr-num-label">{html.escape(label)}</div></div>'
+        for n, label in stats
+    )
+    return (f'<div class="fr-impact"><p class="fr-impact-line">'
+            f'{html.escape(line)}</p><div class="fr-impact-grid">{cells}'
+            "</div></div>")
+
+
+def impact_strip(impact):
+    st.html(impact_html(impact))
 
 
 def grid(items, per_row=2):
@@ -244,8 +778,8 @@ def card(tone=None):
         with ui.card():
             st.markdown("**Vegetable biryani** · 20 kg")
 
-    tone="royal" / "green" / "teal" / "purple" / "coral" gives a soft
-    coloured card with a coral accent stripe (used for stat cards).
+    tone="royal" / "green" / "teal" / "purple" / "coral" / "red" /
+    "amber" gives a white card with a coloured top stripe (stat cards).
     """
     prefix = f"tone-{tone}" if tone else "card"
     return st.container(border=True, key=_key(prefix))
@@ -264,26 +798,108 @@ def _action(button_label, page=None, key=None, primary=False):
 
 
 def stat_card(label, value, caption=None, icon=None, tone="royal",
-              button_label=None, page=None, key=None):
-    """A colourful number card: icon + big number + label, with an optional
-    button to the page where you act on it.
+              button_label=None, page=None, key=None, zero_hint=None):
+    """A number card: icon in a coloured circle + big number + label, a
+    coloured top stripe, and an optional button to the page where you act.
+    When the number is 0, it is shown in a softer grey with `zero_hint`
+    (e.g. "Nothing urgent. Great job!") instead of the caption.
 
+    tone: royal, green, teal, purple, coral, red or amber.
     Returns True when its button (not a page link) was clicked.
     """
-    with card(tone):
+    with st.container(border=True, key=_key(f"tone-{tone}-stat")):
         st.metric(f"{icon} {label}" if icon else label, value)
-        if caption:
-            st.caption(caption)
+        hint = zero_hint if not value and zero_hint else caption
+        if hint:
+            st.caption(hint)
         return _action(button_label, page=page, key=key)
 
 
-def empty_state(message, icon=":material/inbox:", hint=None,
-                button_label=None, page=None, key=None):
-    """Shown instead of an empty list: an icon, one encouraging sentence,
-    and the next step. Returns True when its button (not a link) was clicked.
-    """
+def stat_row(cards):
+    """Stat cards side by side: all in one row on a computer, two per
+    row on a phone. `cards` are dicts of stat_card() arguments."""
+    with st.container(key=_key("statrow")):
+        for column, details in grid(cards, per_row=len(cards)):
+            with column:
+                stat_card(**details)
+
+
+def quick_actions(actions):
+    """A row of small outlined buttons, e.g. ("Add volunteer",
+    ":material/person_add:", page, "volunteer"). A click opens the page
+    with that form already open (see form_requested())."""
+    with st.container(horizontal=True, key=_key("quick-actions")):
+        for label, icon, page, form in actions:
+            if st.button(label, icon=icon, key=f"quick_{form}"):
+                st.session_state[_FORM_REQUEST] = {
+                    "form": form, "page": page.url_path}
+                st.switch_page(page)
+
+
+_FORM_REQUEST = "open_form_request"
+
+
+def form_requested(form):
+    """True if the person came from a quick action for this form, so the
+    page shows that form open. It stays True on this page (e.g. after a
+    mistake in the form) until they save or go to another page."""
+    request = st.session_state.get(_FORM_REQUEST)
+    return bool(request) and request["form"] == form
+
+
+def forget_form_request(current_url_path):
+    """Call on every run: a form request only counts on its own page."""
+    request = st.session_state.get(_FORM_REQUEST)
+    if request and request["page"] != current_url_path:
+        st.session_state.pop(_FORM_REQUEST, None)
+
+
+def progress_html(done, total):
+    """A thin progress bar; the words above it say the same thing."""
+    percent = int(100 * done / total) if total else 0
+    return (f'<div class="fr-progress" role="img" aria-label="{done} of '
+            f'{total} done"><div style="width:{percent}%"></div></div>')
+
+
+def checklist(title, steps):
+    """A "Getting started" card. steps: (words, done, page) in order.
+    Done steps get a green tick and the word "done"; the next step is
+    highlighted. Each step links to the page where it is done."""
+    done_count = sum(1 for _, done, _ in steps if done)
+    next_step = next((i for i, (_, done, _) in enumerate(steps)
+                      if not done), None)
     with card():
-        st.markdown(f"## :orange[{icon}]")
+        card_title(title, ":material/flag:", "blue")
+        st.caption(f"{done_count} of {len(steps)} done. Each step ticks "
+                   "itself when it happens.")
+        st.html(progress_html(done_count, len(steps)))
+        for column, (number, (words, done, page)) in grid(
+                list(enumerate(steps))):
+            state = ("done" if done else
+                     "next" if number == next_step else "todo")
+            with column, st.container(key=_key(f"step-{state}")):
+                st.page_link(
+                    page,
+                    label=(f"{number + 1}. {words}"
+                           + (" · done" if done else "")),
+                    icon=(":material/check_circle:" if done else
+                          ":material/arrow_circle_right:"
+                          if state == "next" else
+                          ":material/radio_button_unchecked:"),
+                    width="stretch",
+                )
+
+
+def empty_state(message, icon=":material/inbox:", hint=None,
+                button_label=None, page=None, key=None, image=None):
+    """Shown instead of an empty list: a picture (or icon), one encouraging
+    sentence, and the next step. Returns True when its button (not a link)
+    was clicked."""
+    with card():
+        if image:
+            illustration(image, width=180)
+        else:
+            st.markdown(f"## :orange[{icon}]")
         st.markdown(f"**{message}**")
         if hint:
             st.markdown(hint)
@@ -368,21 +984,31 @@ def clock_time(value):
 
 # ---------------------------------------------------------------- messages
 
-def flash_success(message):
+def flash_success(message, toast=None, celebrate=False):
     """Show a green success message after the page refreshes with fresh
-    data. Say what happened AND what happens next."""
+    data. Say what happened AND what happens next. `toast` adds a small
+    pop-up; `celebrate` adds balloons (use rarely, e.g. a first delivery)."""
     from app.backend import clear_caches
 
     clear_caches()  # safety net: every write also clears in app/backend.py
-    st.session_state["flash"] = message
+    st.session_state.pop(_FORM_REQUEST, None)  # saved: close the form
+    st.session_state["flash"] = {"message": message, "toast": toast,
+                                 "celebrate": celebrate}
     st.rerun()
 
 
 def show_flash():
     """Show the message saved by flash_success(), once."""
-    if "flash" in st.session_state:
-        st.success(st.session_state.pop("flash"),
-                   icon=":material/check_circle:")
+    if "flash" not in st.session_state:
+        return
+    flash = st.session_state.pop("flash")
+    if isinstance(flash, str):
+        flash = {"message": flash}
+    st.success(flash["message"], icon=":material/check_circle:")
+    if flash.get("toast"):
+        st.toast(flash["toast"], icon=":material/celebration:")
+    if flash.get("celebrate"):
+        st.balloons()
 
 
 def rows(response, key):

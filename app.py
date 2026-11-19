@@ -10,12 +10,18 @@ import psycopg2
 import streamlit as st
 
 from app import ui
-from app.auth import ROLE_LABELS, logout_button, require_user
-from app.backend import get_organization, get_restaurant
+from app.auth import logout_button, require_user
+from app.backend import (
+    get_admin_home_counts_from_api,
+    get_organization,
+    get_restaurant,
+    get_volunteer_pickups_from_api,
+)
 from app.database import is_configured
 from app.home_pages import show_home
 from app.navigation import MENU, PAGES, pages_for, title_for
 from app.privacy import (
+    MINISTRY_NAME,
     is_privacy_request,
     privacy_link_markdown,
     render_privacy_page,
@@ -28,7 +34,11 @@ from app.screens.organizations import (
     my_organization_page,
     organizations_page,
 )
-from app.screens.people import user_access_page, volunteers_page
+from app.screens.people import (
+    ROLE_WORDS,
+    user_access_page,
+    volunteers_page,
+)
 from app.screens.pickups import pickups_page
 from app.screens.reports import reports_page
 
@@ -43,6 +53,7 @@ st.set_page_config(
 )
 
 ui.apply_style()
+ui.brand(MINISTRY_NAME, "Sharing food, sharing love")
 
 
 # Public privacy policy (?page=privacy). It must work without login and
@@ -178,12 +189,38 @@ def build_menu():
 
 
 current_page = st.navigation(build_menu(), position="sidebar")
+ui.forget_form_request(current_page.url_path)
 
-st.sidebar.markdown(
-    f"**{user['full_name'] or user['email']}**  \n"
-    f"{ROLE_LABELS[role]}"
-)
-logout_button()
-st.sidebar.caption(privacy_link_markdown())
+
+def menu_counts():
+    """Coral count pills on the menu, from numbers that are already
+    cached (no extra slow queries)."""
+    if role == "ADMIN":
+        counts = get_admin_home_counts_from_api()
+        if "error" in counts:
+            return {}
+        return {
+            "pickups": counts["pickups_to_accept"]
+            + counts["pickups_needing_volunteer"],
+            "user-access": counts["people_to_approve"],
+            "organizations": counts["organizations_to_verify"],
+        }
+    if role == "VOLUNTEER" and user["volunteer_id"]:
+        pickups = get_volunteer_pickups_from_api(user["volunteer_id"])
+        if "error" in pickups:
+            return {}
+        return {"pickups": sum(1 for p in pickups["pickups"]
+                               if p[8] in ("ACCEPTED", "PICKED_UP"))}
+    return {}
+
+
+ui.nav_badges(menu_counts())
+
+# Profile card at the bottom of the sidebar.
+with st.sidebar.container(key="profile"):
+    st.html(ui.profile_html(user["full_name"] or user["email"],
+                            ROLE_WORDS.get(role, role.title())))
+    logout_button()
+    st.caption(privacy_link_markdown())
 
 current_page.run()

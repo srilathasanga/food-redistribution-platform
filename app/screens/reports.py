@@ -84,7 +84,8 @@ def reports_page(ctx):
             ("DELIVERED", pickups["delivered_pickups"]),
         ]))
     if charts:
-        st.subheader("Where things stand")
+        ui.section_title("Where things stand", ":material/bar_chart:",
+                         "blue")
         for column, (title, counts) in ui.grid(charts):
             with column:
                 ui.status_chart(title, counts)
@@ -93,7 +94,8 @@ def reports_page(ctx):
 
 
 def _food_needing_attention(ctx, now):
-    st.subheader("Food that needs attention")
+    ui.section_title("Food that needs attention",
+                     ":material/priority_high:", "coral")
     risks = ui.rows(get_food_risk_analysis_from_api(), "risk_analysis")
     if not risks:
         st.success("No food is waiting to be collected right now.",

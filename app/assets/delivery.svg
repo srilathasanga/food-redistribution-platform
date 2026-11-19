@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="A delivery van with a heart">
+  <circle cx="120" cy="84" r="66" fill="#EDF2FF"/>
+  <rect x="30" y="130" width="180" height="6" rx="3" fill="#DBE4FF"/>
+  <path d="M30 84h22M24 98h28M34 112h18" stroke="#BAC8FF" stroke-width="5" stroke-linecap="round"/>
+  <rect x="62" y="62" width="88" height="58" rx="8" fill="#364FC7"/>
+  <path d="M150 76h22l18 20v24h-40z" fill="#4C6EF5"/>
+  <path d="M156 82h14l12 14h-26z" fill="#DBE4FF"/>
+  <path d="M106 108c-9-7-16-11-16-18 0-5 4-8 8-8 3 0 6 2 8 5 2-3 5-5 8-5 4 0 8 3 8 8 0 7-7 11-16 18z" fill="#FF6B6B"/>
+  <circle cx="88" cy="122" r="11" fill="#1F2A37"/><circle cx="88" cy="122" r="4" fill="#DBE4FF"/>
+  <circle cx="168" cy="122" r="11" fill="#1F2A37"/><circle cx="168" cy="122" r="4" fill="#DBE4FF"/>
+</svg>

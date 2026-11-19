@@ -61,11 +61,13 @@ def _volunteer_pickups(ctx, now):
 
     if not active:
         ui.empty_state("No pickups assigned to you right now",
-                       icon=":material/directions_walk:",
+                       icon=":material/directions_walk:", image="delivery",
                        hint="A coordinator assigns pickups when food is "
                             "ready. Thank you for helping!")
+    # Balloons only for this volunteer's very first delivery.
+    first_delivery = not any(p[8] == "DELIVERED" for p in finished)
     for number, pickup in enumerate(active, start=1):
-        volunteer_card(number, pickup, now, ui.flash_success)
+        volunteer_card(number, pickup, now, ui.flash_success, first_delivery)
 
     if finished:
         with st.expander(f"Finished ({len(finished)})",
@@ -96,7 +98,7 @@ def _organization_pickups(ctx, now):
         organization_id=organization[0]), "pickups")
     if not requests:
         ui.empty_state("No pickup requests yet",
-                       icon=":material/local_shipping:",
+                       icon=":material/local_shipping:", image="empty-list",
                        hint="Request food from Available food and follow "
                             "it here.")
     for column, pickup in ui.grid(requests):
@@ -126,7 +128,8 @@ def _admin_pickups(ctx, now):
     )
 
     # 1. Accept
-    st.subheader(f"1. To accept ({len(to_accept)})")
+    ui.section_title(f"1. To accept ({len(to_accept)})",
+                     ":material/inbox:", "coral")
     if not to_accept:
         st.caption("No new requests.")
     for column, pickup in ui.grid(to_accept):
@@ -140,7 +143,8 @@ def _admin_pickups(ctx, now):
                                "volunteer under \"Needs a volunteer\".")
 
     # 2. Assign a volunteer
-    st.subheader(f"2. Needs a volunteer ({len(needs_volunteer)})")
+    ui.section_title(f"2. Needs a volunteer ({len(needs_volunteer)})",
+                     ":material/person_search:", "purple")
     volunteers = []
     if needs_volunteer:
         volunteers = [
@@ -180,7 +184,8 @@ def _admin_pickups(ctx, now):
                     )
 
     # 3. On the way
-    st.subheader(f"3. On the way ({len(on_the_way)})")
+    ui.section_title(f"3. On the way ({len(on_the_way)})",
+                     ":material/local_shipping:", "blue")
     if not on_the_way:
         st.caption("Nothing is on the way right now.")
     for column, pickup in ui.grid(on_the_way):
@@ -197,7 +202,9 @@ def _admin_pickups(ctx, now):
                            icon=":material/task_alt:", width="stretch"):
                 _change_status(pickup, "DELIVERED",
                                f"{pickup[1]} was delivered to {pickup[5]}. "
-                               "Thank you!")
+                               "Thank you!",
+                               toast=f"{pickup[1]} delivered!",
+                               celebrate=not delivered)
 
     # 4. Delivered
     with st.expander(f"4. Delivered ({len(delivered)})",
@@ -214,7 +221,9 @@ def _pickup_details(pickup, now):
     (_, food_name, quantity, unit, restaurant, organization, _requested,
      pickup_time, status, address, notes, volunteer_id,
      volunteer_name) = pickup[:13]
-    st.markdown(f"**{food_name}** · {ui.amount(quantity, unit)}")
+    ui.card_title(f"{food_name} · {ui.amount(quantity, unit)}",
+                  ":material/local_shipping:", "blue")
+    ui.pickup_tracker(status)
     st.markdown(ui.badge_markdown(ui.pickup_status(status, volunteer_id)))
     lines = [f":material/storefront: From **{restaurant}**",
              f":material/home: To **{organization}**"]
@@ -231,12 +240,13 @@ def _pickup_details(pickup, now):
     st.markdown("  \n".join(lines))
 
 
-def _change_status(pickup, new_status, message):
+def _change_status(pickup, new_status, message, toast=None,
+                   celebrate=False):
     result = update_pickup_status_from_api(pickup[0], new_status)
     if "error" in result:
         st.error(result["error"], icon=":material/error:")
     else:
-        ui.flash_success(message)
+        ui.flash_success(message, toast=toast, celebrate=celebrate)
 
 
 def _request_for_organization():

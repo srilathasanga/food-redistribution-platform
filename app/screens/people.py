@@ -34,7 +34,8 @@ def volunteers_page(ctx):
                "automatically when you approve them under User access.")
 
     with st.expander("Add a volunteer", icon=":material/person_add:",
-                     expanded=not volunteers):
+                     expanded=(ui.form_requested("volunteer")
+                               or not volunteers)):
         with st.form("volunteer_form"):
             col1, col2 = st.columns(2)
             name = col1.text_input("Name", placeholder="e.g. Ravi Teja")
@@ -83,15 +84,16 @@ def volunteers_page(ctx):
 
     if not volunteers:
         ui.empty_state("No volunteers yet. Add the first one above!",
-                       icon=":material/directions_walk:")
+                       icon=":material/directions_walk:", image="delivery")
         return
 
-    st.subheader(ui.plural(len(volunteers), "volunteer"))
+    ui.section_title(ui.plural(len(volunteers), "volunteer"),
+                     ":material/directions_walk:", "teal")
     for column, volunteer in ui.grid(volunteers):
         (_, name, phone, email, address, city, availability, status,
          _created) = volunteer
         with column, ui.card():
-            st.markdown(f"#### {name}")
+            ui.person_header(name, [city])
             badges = [ui.badge_markdown("DISABLED" if status != "ACTIVE"
                                         else availability)]
             st.markdown(" ".join(badges))
@@ -125,13 +127,14 @@ def user_access_page(ctx):
     )
 
     # 1. The next action: people waiting for approval.
-    st.subheader("Waiting for approval")
+    ui.section_title(f"Waiting for approval ({len(pending)})",
+                     ":material/person_add:", "coral")
     if not pending:
         st.success("Nobody is waiting.", icon=":material/task_alt:")
     for column, person in ui.grid(pending):
         email = person["email"]
         with column, ui.card():
-            st.markdown(f"#### {person['full_name'] or email}")
+            ui.person_header(person["full_name"] or email, [person["city"]])
             st.markdown(ui.badge_markdown("PENDING")
                         + f" asked to join as "
                         f"**{ROLE_WORDS.get(person['role'], person['role'])}**")
@@ -161,7 +164,8 @@ def user_access_page(ctx):
 
     # 2. Everyone else, as cards, with a search box.
     everyone = [p for p in list_users() if p["status"] != "PENDING"]
-    st.subheader(ui.plural(len(everyone), "person", "people"))
+    ui.section_title(ui.plural(len(everyone), "person", "people"),
+                     ":material/groups:", "purple")
     search = st.text_input("Find a person", placeholder="Name or email",
                            icon=":material/search:")
     if search.strip():
@@ -174,7 +178,9 @@ def user_access_page(ctx):
     for column, person in ui.grid(everyone):
         email = person["email"]
         with column, ui.card():
-            st.markdown(f"#### {person['full_name'] or email}")
+            ui.person_header(person["full_name"] or email,
+                             [ROLE_WORDS.get(person["role"], person["role"]),
+                              person["city"]])
             st.markdown(
                 ui.badge_markdown(person["status"])
                 + f" **{ROLE_WORDS.get(person['role'], person['role'])}**"

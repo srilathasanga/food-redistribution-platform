@@ -149,7 +149,7 @@ def donations_page(ctx):
     if not restaurants:
         ui.empty_state(
             "First, add the kitchen you share food from",
-            icon=":material/storefront:",
+            icon=":material/storefront:", image="signin",
             hint="You only do this once.",
             button_label="Add a kitchen",
             page=ctx.pages["restaurants" if ctx.is_admin
@@ -157,6 +157,7 @@ def donations_page(ctx):
         )
         return
 
+    # (Always open; Home's "Share food" quick action lands here.)
     with st.expander("Share surplus food", icon=":material/add_circle:",
                      expanded=True):
         _share_food(restaurants)
@@ -168,13 +169,14 @@ def donations_page(ctx):
 
 
 def _my_donations(restaurant_id, now):
-    st.subheader("My recent donations")
+    ui.section_title("My recent donations", ":material/soup_kitchen:",
+                     "green")
     donations = ui.rows(get_my_donations_from_api(restaurant_id, 20),
                         "donations")
     if not donations:
         ui.empty_state(
             "You haven't shared any food yet",
-            icon=":material/soup_kitchen:",
+            icon=":material/soup_kitchen:", image="empty-food",
             hint="When you share food, you'll see here when it is "
                  "requested, picked up and delivered.",
         )
@@ -184,7 +186,8 @@ def _my_donations(restaurant_id, now):
         expired = (status == "AVAILABLE"
                    and ui.to_datetime(expiry_time) <= now)
         with column, ui.card():
-            st.markdown(f"**{food_name}** · {ui.amount(quantity, unit)}")
+            ui.card_title(f"{food_name} · {ui.amount(quantity, unit)}",
+                          ":material/soup_kitchen:", "green")
             st.markdown(ui.badge_markdown("EXPIRED" if expired else status))
             st.caption(
                 f"Shared {ui.friendly_time(created, now)} · "
@@ -199,10 +202,11 @@ def _all_available_food(now):
     food = ui.rows(get_available_donations_from_api(), "donations")
     requestable = {row[0] for row in
                    ui.rows(get_requestable_donations_from_api(), "donations")}
-    st.subheader(ui.plural(len(food), "item") + " of food available now")
+    ui.section_title(ui.plural(len(food), "item") + " of food available now",
+                     ":material/restaurant:", "green")
     if not food:
         ui.empty_state("No food is waiting right now",
-                       icon=":material/restaurant:",
+                       icon=":material/restaurant:", image="empty-food",
                        hint="Shared food appears here until it is "
                             "collected or expires.")
         return
@@ -216,8 +220,9 @@ def _all_available_food(now):
         if urgency:
             badges.append(ui.badge_markdown(urgency))
         with column, ui.card():
-            st.markdown(f"**{food_name}** · {ui.amount(quantity, unit)} · "
-                        f"{FOOD_TYPES.get(food_type, food_type)}")
+            ui.card_title(f"{food_name} · {ui.amount(quantity, unit)}",
+                          ":material/restaurant:", "green")
+            st.markdown(f":gray-badge[{FOOD_TYPES.get(food_type, food_type)}]")
             st.markdown(" ".join(badges))
             st.markdown(
                 f":material/storefront: {restaurant}"
@@ -234,7 +239,7 @@ def available_food_page(ctx):
     if not ctx.my_organization:
         ui.empty_state(
             "First, tell us about your organization",
-            icon=":material/apartment:",
+            icon=":material/apartment:", image="empty-people",
             hint="A coordinator checks every organization before it can "
                  "request food.",
             button_label="Add my organization",

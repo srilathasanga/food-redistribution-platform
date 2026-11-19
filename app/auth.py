@@ -18,7 +18,7 @@ import streamlit as st
 from app.backend import ensure_admin, get_user, record_login, request_access
 from app.config import get_list_setting, get_setting
 from app.privacy import MINISTRY_NAME, privacy_link_markdown
-from app.ui import centered_card
+from app.ui import centered_card, illustration
 from app.user_service import SELF_SERVICE_ROLES, normalize_email
 
 ROLE_LABELS = {
@@ -54,8 +54,9 @@ def _log_out():
 
 
 def logout_button():
-    """Log out button in the sidebar (signed-in pages)."""
-    if st.sidebar.button("Log out", icon=":material/logout:"):
+    """Compact Log out button. Call it inside the sidebar (with
+    st.sidebar: ...), e.g. in the profile card."""
+    if st.button("Log out", icon=":material/logout:", key="log_out"):
         _log_out()
 
 
@@ -76,6 +77,8 @@ _HOW_IT_WORKS = (
 
 def _welcome_hero():
     """Top of the sign-in card: who we are and what the app does."""
+    with st.container(horizontal_alignment="center"):
+        illustration("signin", width=240)
     st.markdown(f"### :material/volunteer_activism: {MINISTRY_NAME}")
     st.title("Share surplus food with neighbours in need")
     st.markdown(

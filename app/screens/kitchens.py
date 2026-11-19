@@ -93,7 +93,7 @@ def my_restaurant_page(ctx):
         (_, name, contact_person, phone, email, address, city,
          status) = restaurant[:8]
         with ui.card():
-            st.markdown(f"#### {name}")
+            ui.person_header(name, [city])
             st.markdown(ui.badge_markdown(status or "ACTIVE"))
             st.markdown(_kitchen_lines(contact_person, phone, email,
                                        address, city))
@@ -139,7 +139,8 @@ def restaurants_page(ctx):
 
     with st.expander("Add a restaurant or kitchen",
                      icon=":material/add_business:",
-                     expanded=not restaurants):
+                     expanded=(ui.form_requested("restaurant")
+                               or not restaurants)):
         details = _kitchen_form("restaurant_form", "Add restaurant")
         if details:
             result = create_restaurant_from_api(details)
@@ -155,18 +156,19 @@ def restaurants_page(ctx):
     if not restaurants:
         ui.empty_state(
             "No restaurants yet. Add the first one to start sharing food!",
-            icon=":material/storefront:",
+            icon=":material/storefront:", image="empty-food",
             hint="Use the form above. Donors can also add their own "
                  "kitchen when they sign in.",
         )
         return
 
-    st.subheader(ui.plural(len(restaurants), "restaurant"))
+    ui.section_title(ui.plural(len(restaurants), "restaurant"),
+                     ":material/storefront:", "blue")
     for column, restaurant in ui.grid(restaurants):
         (_, name, contact_person, phone, email, address, city, status,
          _created) = restaurant
         with column, ui.card():
-            st.markdown(f"#### {name}")
+            ui.person_header(name, [city])
             st.markdown(ui.badge_markdown(status or "ACTIVE"))
             st.markdown(_kitchen_lines(contact_person, phone, email,
                                        address, city))
