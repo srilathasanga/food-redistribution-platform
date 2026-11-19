@@ -8,3 +8,7 @@ __pycache__/
 
 # Personal notes (never commit)
 Info-Food-Dist-App.txt
+
+# Any secrets file in .streamlit (keep only the shareable example)
+.streamlit/*secrets*
+!.streamlit/secrets.toml.example
