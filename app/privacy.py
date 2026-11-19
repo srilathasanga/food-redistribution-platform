@@ -4,8 +4,7 @@ Shown at the app URL with ?page=privacy, for example
 https://YOUR-APP.streamlit.app/?page=privacy
 
 It needs no login and no database, so Google (and anyone else) can read
-it even when the database is down. Still to fill in before going live:
-[Ministry name], [name] and [email].
+it even when the database is down.
 """
 
 import streamlit as st
@@ -16,14 +15,14 @@ PRIVACY_QUERY_VALUE = "privacy"
 # the app's address.
 PRIVACY_LINK = "?page=privacy"
 
-LAST_UPDATED = "18 November 2026"
+LAST_UPDATED = "19 November 2026"
 
 PRIVACY_POLICY = f"""
-**[Ministry name]** · Food Redistribution Platform
+**Test Ministry** · Food Redistribution Platform
 
 *Last updated: {LAST_UPDATED}*
 
-This app is run by **[Ministry name]**, a church food ministry. It
+This app is run by **Test Ministry**, a church food ministry. It
 connects surplus food from restaurants, caterers and families with
 verified organizations (homes, shelters, charities), and with volunteers
 who collect and deliver the food. This page explains, in plain words,
@@ -91,8 +90,8 @@ connections.
 You can ask to see the information we hold about you, to correct it, or
 to delete it. Please contact the ministry admin:
 
-- **[name]**, [Ministry name]
-- Email: **[email]**
+- **Srilatha**, Test Ministry
+- Email: [srilathasanga@gmail.com](mailto:srilathasanga@gmail.com)
 
 ### Changes to this policy
 
