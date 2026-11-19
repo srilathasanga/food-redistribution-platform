@@ -13,17 +13,13 @@ Emails in ADMIN_EMAILS become admins automatically on first login.
 
 import streamlit as st
 
+# Reads are cached (the sign-in check for at most 20 seconds) and writes
+# clear the caches: see app/backend.py.
+from app.backend import ensure_admin, get_user, record_login, request_access
 from app.config import get_list_setting, get_setting
 from app.privacy import MINISTRY_NAME, privacy_link_markdown
 from app.ui import centered_card
-from app.user_service import (
-    SELF_SERVICE_ROLES,
-    ensure_admin,
-    get_user,
-    normalize_email,
-    record_login,
-    request_access,
-)
+from app.user_service import SELF_SERVICE_ROLES, normalize_email
 
 ROLE_LABELS = {
     "ADMIN": "Admin (ministry coordinator)",
@@ -242,10 +238,12 @@ def require_user():
         st.stop()
 
     admin_emails = {normalize_email(e) for e in get_list_setting("ADMIN_EMAILS")}
-    if email in admin_emails:
+    user = get_user(email)
+    if email in admin_emails and not (
+            user and user["role"] == "ADMIN" and user["status"] == "ACTIVE"):
+        # Only write when the admin's row is missing or needs fixing,
+        # not on every click.
         user = ensure_admin(email, name)
-    else:
-        user = get_user(email)
 
     if user is None or user["status"] == "PENDING":
         _request_access_screen(email, name, user)

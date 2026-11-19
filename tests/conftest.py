@@ -60,6 +60,10 @@ def _stop_unless_test_database(connection):
 
 @pytest.fixture(autouse=True)
 def clean_database(request):
+    # Cached read results (app/backend.py) must never leak between tests.
+    import streamlit as st
+
+    st.cache_data.clear()
     if request.node.get_closest_marker("no_database"):
         yield
         return

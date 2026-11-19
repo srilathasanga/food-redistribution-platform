@@ -11,6 +11,7 @@ import streamlit as st
 
 from app import ui
 from app.auth import ROLE_LABELS, logout_button, require_user
+from app.backend import get_organization, get_restaurant
 from app.database import is_configured
 from app.home_pages import show_home
 from app.navigation import MENU, PAGES, pages_for, title_for
@@ -30,7 +31,6 @@ from app.screens.organizations import (
 from app.screens.people import user_access_page, volunteers_page
 from app.screens.pickups import pickups_page
 from app.screens.reports import reports_page
-from app.user_service import get_organization, get_restaurant
 
 # =========================================================
 # STREAMLIT PAGE CONFIGURATION

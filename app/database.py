@@ -15,14 +15,22 @@ connection back to the pool.
 """
 
 import threading
+import time
 
 import psycopg2
 from psycopg2 import pool
+from psycopg2.extensions import TRANSACTION_STATUS_IDLE
 
 from app.config import APP_TIMEZONE, get_setting
 
 _pool = None
 _pool_lock = threading.Lock()
+
+# Each check costs a round trip to the database (about 0.26 s from India to
+# Neon in the US), so a connection is only checked when it has been idle
+# long enough that Neon may have closed it.
+CHECK_IF_IDLE_SECONDS = 30
+_last_used = {}  # id(raw connection) -> time it was last handed back
 
 
 def _connect_kwargs():
@@ -78,10 +86,17 @@ class PooledConnection:
         broken = bool(self._conn.closed)
         if not broken:
             try:
-                # Never hand an open transaction to the next user.
-                self._conn.rollback()
+                # Never hand an open transaction to the next user. (After a
+                # commit there is none, so skip the extra round trip.)
+                if (self._conn.info.transaction_status
+                        != TRANSACTION_STATUS_IDLE):
+                    self._conn.rollback()
             except psycopg2.Error:
                 broken = True
+        if broken:
+            _last_used.pop(id(self._conn), None)
+        else:
+            _last_used[id(self._conn)] = time.monotonic()
         self._pool.putconn(self._conn, close=broken)
 
     def __enter__(self):
@@ -107,11 +122,17 @@ def get_connection():
     owner_pool = _get_pool()
 
     # A serverless database (Neon) drops idle connections when it sleeps,
-    # so check each one before use and replace it if it went stale.
+    # so check a connection before use if it has been idle for a while (or
+    # is new to us), and replace it if it went stale.
     for _ in range(3):
         raw_connection = owner_pool.getconn()
-        if _is_alive(raw_connection):
+        last_used = _last_used.get(id(raw_connection))
+        recently_used = (last_used is not None and time.monotonic() - last_used
+                         < CHECK_IF_IDLE_SECONDS)
+        if not raw_connection.closed and (recently_used
+                                          or _is_alive(raw_connection)):
             return PooledConnection(raw_connection, owner_pool)
+        _last_used.pop(id(raw_connection), None)
         owner_pool.putconn(raw_connection, close=True)
 
     raise psycopg2.OperationalError(
@@ -126,3 +147,4 @@ def reset_pool():
         if _pool is not None:
             _pool.closeall()
             _pool = None
+        _last_used.clear()

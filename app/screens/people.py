@@ -3,10 +3,16 @@
 import streamlit as st
 
 from app import ui
-from app.backend import create_volunteer_from_api, get_volunteers_from_api
+from app.backend import (
+    approve_user,
+    create_volunteer_from_api,
+    get_volunteers_from_api,
+    list_users,
+    set_user_status,
+)
 from app.screens.kitchens import contact_problems
 from app.timeutil import now_local
-from app.user_service import ROLES, approve_user, list_users, set_user_status
+from app.user_service import ROLES
 
 ROLE_WORDS = {"ADMIN": "Admin", "DONOR": "Donor",
               "ORGANIZATION": "Organization", "VOLUNTEER": "Volunteer"}

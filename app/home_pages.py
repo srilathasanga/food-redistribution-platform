@@ -16,18 +16,15 @@ import streamlit as st
 from app import ui
 from app.backend import (
     create_pickup_from_api,
-    get_available_donations_from_api,
-    get_food_risk_analysis_from_api,
+    get_admin_home_counts_from_api,
     get_my_donations_from_api,
-    get_pending_organizations_from_api,
     get_pickup_requests_from_api,
-    get_pickup_summary_from_api,
     get_requestable_donations_from_api,
+    get_urgent_food_from_api,
     get_volunteer_pickups_from_api,
     update_pickup_status_from_api,
 )
 from app.timeutil import now_local
-from app.user_service import list_users
 
 ACTIVE_FOR_VOLUNTEER = ("ACCEPTED", "PICKED_UP")
 
@@ -66,31 +63,30 @@ def show_home(user, my_restaurant, my_organization, pages, flash_success):
 # ---------------------------------------------------------------- admin
 
 def _admin_home(user, pages, now):
-    available = ui.rows(get_available_donations_from_api(), "donations")
-    risks = ui.rows(get_food_risk_analysis_from_api(), "risk_analysis")
-    urgent = sorted(
-        (r for r in risks if r["risk_level"] == "HIGH"),
-        key=lambda r: r["hours_remaining"],
-    )
-    expired_uncollected = [
-        r for r in risks
-        if r["risk_level"] == "EXPIRED" and r["donation_status"] == "AVAILABLE"
-    ]
-    summary = get_pickup_summary_from_api()
-    waiting_pickups = 0 if "error" in summary else summary["requested_pickups"]
-    people = list_users(status="PENDING")
-    orgs = ui.rows(get_pending_organizations_from_api(), "organizations")
+    # All of today's numbers in ONE database query (see dashboard_service).
+    counts = get_admin_home_counts_from_api()
+    if "error" in counts:
+        st.error(counts["error"], icon=":material/error:")
+        counts = {}
+    urgent_count = counts.get("urgent", 0)
+    waiting_pickups = counts.get("pickups_to_accept", 0)
+    people_count = counts.get("people_to_approve", 0)
+    orgs_count = counts.get("organizations_to_verify", 0)
+    expired_count = counts.get("expired_uncollected", 0)
+    # The urgent list itself is only fetched when something is urgent.
+    urgent = (ui.rows(get_urgent_food_from_api(), "donations")
+              if urgent_count else [])
 
     todo = []
-    if urgent:
-        todo.append(ui.plural(len(urgent), "urgent item"))
+    if urgent_count:
+        todo.append(ui.plural(urgent_count, "urgent item"))
     if waiting_pickups:
         todo.append(ui.plural(waiting_pickups, "pickup") + " to accept")
-    if people:
-        todo.append(ui.plural(len(people), "person", "people")
+    if people_count:
+        todo.append(ui.plural(people_count, "person", "people")
                     + " to approve")
-    if orgs:
-        todo.append(ui.plural(len(orgs), "organization") + " to verify")
+    if orgs_count:
+        todo.append(ui.plural(orgs_count, "organization") + " to verify")
     purpose = (
         "Needs you today: " + ", ".join(todo) + "."
         if todo else "All caught up. Nothing needs you right now."
@@ -103,22 +99,22 @@ def _admin_home(user, pages, now):
         with ui.card("coral"):
             st.subheader(":orange[:material/priority_high:] Expiring in under "
                          "2 hours")
-            for item in urgent:
+            for (_, food_name, quantity, unit, expiry_time,
+                 status) in urgent:
                 st.markdown(
-                    f"**{item['food_name']}** · "
-                    f"{ui.amount(item['quantity'], item['unit'])} · expires "
-                    f"**{ui.friendly_time(item['expiry_time'], now)}**  \n"
-                    f"{ui.badge_markdown(item['donation_status'])}"
+                    f"**{food_name}** · {ui.amount(quantity, unit)} · "
+                    f"expires **{ui.friendly_time(expiry_time, now)}**  \n"
+                    f"{ui.badge_markdown(status)}"
                 )
             st.page_link(pages["pickups"], label="Arrange pickups",
                          icon=":material/arrow_forward:", width="stretch")
 
     cards = [
-        dict(label="Food available", value=len(available),
+        dict(label="Food available", value=counts.get("food_available", 0),
              caption="donations ready to request",
              icon=":material/restaurant:", tone="green",
              button_label="See food", page=pages["donations"]),
-        dict(label="Urgent", value=len(urgent),
+        dict(label="Urgent", value=urgent_count,
              caption="expires in under 2 hours",
              icon=":material/priority_high:", tone="coral",
              button_label="See pickups", page=pages["pickups"]),
@@ -127,7 +123,7 @@ def _admin_home(user, pages, now):
              icon=":material/hourglass_top:", tone="royal",
              button_label="Accept and assign volunteers",
              page=pages["pickups"]),
-        dict(label="People to approve", value=len(people),
+        dict(label="People to approve", value=people_count,
              caption="asked to join", icon=":material/person_add:",
              tone="purple", button_label="Review requests",
              page=pages["user-access"]),
@@ -136,18 +132,18 @@ def _admin_home(user, pages, now):
         with column:
             ui.stat_card(**details)
 
-    if orgs:
+    if orgs_count:
         with ui.card("teal"):
             st.markdown(
-                f":material/verified: **{ui.plural(len(orgs), 'organization')}"
+                f":material/verified: **{ui.plural(orgs_count, 'organization')}"
                 "** waiting to be verified."
             )
             st.page_link(pages["organizations"],
                          label="Verify organizations",
                          icon=":material/arrow_forward:", width="stretch")
-    if expired_uncollected:
+    if expired_count:
         st.caption(
-            f"{ui.plural(len(expired_uncollected), 'donation')} expired "
+            f"{ui.plural(expired_count, 'donation')} expired "
             "without being collected."
         )
 

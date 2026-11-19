@@ -371,6 +371,9 @@ def clock_time(value):
 def flash_success(message):
     """Show a green success message after the page refreshes with fresh
     data. Say what happened AND what happens next."""
+    from app.backend import clear_caches
+
+    clear_caches()  # safety net: every write also clears in app/backend.py
     st.session_state["flash"] = message
     st.rerun()
 

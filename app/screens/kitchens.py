@@ -3,8 +3,11 @@
 import streamlit as st
 
 from app import ui
-from app.backend import create_restaurant_from_api, get_restaurants_from_api
-from app.user_service import link_restaurant
+from app.backend import (
+    create_restaurant_from_api,
+    get_restaurants_from_api,
+    link_restaurant,
+)
 
 
 def contact_problems(phone, email):

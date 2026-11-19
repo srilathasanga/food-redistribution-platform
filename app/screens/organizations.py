@@ -7,11 +7,11 @@ from app.backend import (
     create_organization_from_api,
     get_pending_organizations_from_api,
     get_verified_organizations_from_api,
+    link_organization,
     reject_organization_from_api,
     verify_organization_from_api,
 )
 from app.screens.kitchens import contact_problems
-from app.user_service import link_organization
 
 ORGANIZATION_TYPES = ["NGO", "Charity", "Food Bank", "Community Organization",
                       "Home or shelter", "Church", "Other"]
