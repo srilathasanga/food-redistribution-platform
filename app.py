@@ -27,6 +27,7 @@ from app.backend import (
     verify_organization_from_api,
 )
 from app.database import is_configured
+from app.navigation import MENU, PAGES, pages_for, title_for
 from app.privacy import (
     is_privacy_request,
     privacy_link_markdown,
@@ -34,6 +35,7 @@ from app.privacy import (
 )
 from app.schema import ensure_schema
 from app.timeutil import now_local
+from app.ui import apply_style
 from app.user_service import (
     ROLES,
     approve_user,
@@ -55,6 +57,8 @@ st.set_page_config(
     page_icon="🍲",
     layout="wide"
 )
+
+apply_style()
 
 
 # Public privacy policy (?page=privacy). It must work without login and
@@ -146,47 +150,6 @@ if "flash" in st.session_state:
     st.success(st.session_state.pop("flash"))
 
 
-# =========================================================
-# SIDEBAR NAVIGATION (each role sees only its own pages)
-# =========================================================
-
-MENUS = {
-    "ADMIN": [
-        "Home",
-        "Restaurants",
-        "Food Donations",
-        "Organizations",
-        "Pickup Requests",
-        "Admin",
-        "User Access",
-    ],
-    "DONOR": ["Home", "My Restaurant", "Food Donations"],
-    "ORGANIZATION": [
-        "Home",
-        "My Organization",
-        "Available Food",
-        "Pickup Requests",
-    ],
-    "VOLUNTEER": ["Home", "My Pickups"],
-}
-
-st.sidebar.title("Navigation")
-st.sidebar.caption(
-    f"Signed in as {user['full_name'] or user['email']} · {role.title()}"
-)
-logout_button()
-
-menu = st.sidebar.radio(
-    "Choose a module",
-    MENUS[role]
-)
-
-st.sidebar.caption(privacy_link_markdown())
-
-if menu not in MENUS[role]:
-    st.error("You do not have access to this page.")
-    st.stop()
-
 my_restaurant = (
     get_restaurant(user["restaurant_id"])
     if user["restaurant_id"] else None
@@ -201,7 +164,7 @@ my_organization = (
 # HOME
 # =========================================================
 
-if menu == "Home":
+def home_page():
 
     st.header(f"Welcome, {user['full_name'] or user['email']}")
     st.caption(ROLE_LABELS[role])
@@ -216,32 +179,33 @@ if menu == "Home":
             len(pending_orgs.get("organizations", [])),
         )
         st.info(
-            "Approve people under **User Access**, verify organizations "
-            "and assign volunteers under **Admin** and **Pickup Requests**."
+            "Approve people under **User access**, verify organizations "
+            "under **Reports & tools**, and assign volunteers under "
+            "**Pickup requests**."
         )
 
     elif role == "DONOR":
         if my_restaurant:
             st.info(
                 f"You donate as **{my_restaurant[1]}**. "
-                "Post surplus food under **Food Donations**."
+                "Post surplus food under **My donations**."
             )
         else:
             st.warning(
                 "First register your restaurant or kitchen under "
-                "**My Restaurant**, then post food under **Food Donations**."
+                "**My restaurant**, then post food under **My donations**."
             )
 
     elif role == "ORGANIZATION":
         if not my_organization:
             st.warning(
-                "Register your organization under **My Organization**. "
+                "Register your organization under **My organization**. "
                 "An admin will verify it before you can request food."
             )
         elif my_organization[8] == "VERIFIED":
             st.success(
-                f"**{my_organization[1]}** is verified. See **Available Food** "
-                "and request a pickup under **Pickup Requests**."
+                f"**{my_organization[1]}** is verified. See **Available food** "
+                "and request a pickup under **Pickup requests**."
             )
         else:
             st.info(
@@ -251,7 +215,7 @@ if menu == "Home":
 
     elif role == "VOLUNTEER":
         st.info(
-            "Your assigned pickups are under **My Pickups**. Mark each one "
+            "Your assigned pickups are under **My pickups**. Mark each one "
             "picked up and then delivered as you go."
         )
 
@@ -260,7 +224,7 @@ if menu == "Home":
 # MY RESTAURANT (donor)
 # =========================================================
 
-elif menu == "My Restaurant":
+def my_restaurant_page():
 
     st.header("🏪 My Restaurant")
 
@@ -310,7 +274,7 @@ elif menu == "My Restaurant":
 # MY ORGANIZATION (receiving organization)
 # =========================================================
 
-elif menu == "My Organization":
+def my_organization_page():
 
     st.header("🏢 My Organization")
 
@@ -376,7 +340,7 @@ elif menu == "My Organization":
 # AVAILABLE FOOD (receiving organization)
 # =========================================================
 
-elif menu == "Available Food":
+def available_food_page():
 
     st.header("🍱 Available Food")
     donation_response = get_available_donations_from_api()
@@ -389,7 +353,7 @@ elif menu == "Available Food":
                 f"{donation[1]} — {donation[8].replace('_', ' ').title()} — "
                 f"Expires: {donation[7].replace('T', ' ')[:16]}"
             )
-        st.caption("Request any of these under **Pickup Requests**.")
+        st.caption("Request any of these under **Pickup requests**.")
     else:
         st.info("No food is available right now. Please check back later.")
 
@@ -398,7 +362,7 @@ elif menu == "Available Food":
 # USER ACCESS (admin)
 # =========================================================
 
-elif menu == "User Access":
+def user_access_page():
 
     st.header("🔐 User Access")
 
@@ -468,7 +432,7 @@ elif menu == "User Access":
             flash_success(f"{target_email} is now {new_status.lower()}.")
 
 
-elif menu == "Restaurants":
+def restaurants_page():
 
     st.header("🏪 Restaurant Management")
 
@@ -579,7 +543,7 @@ elif menu == "Restaurants":
 # FOOD DONATIONS
 # =========================================================
 
-elif menu == "Food Donations":
+def donations_page():
 
     st.header("🍱 Food Donation Management")
 
@@ -611,7 +575,7 @@ elif menu == "Food Donations":
         st.warning(
             "No restaurants are available. "
             "Please register a restaurant first"
-            + (" under **My Restaurant**." if not is_admin else ".")
+            + (" under **My restaurant**." if not is_admin else ".")
         )
 
     else:
@@ -800,7 +764,7 @@ elif menu == "Food Donations":
 # ORGANIZATIONS
 # =========================================================
 
-elif menu == "Organizations":
+def organizations_page():
 
     st.header("🏢 Organization / NGO Management")
 
@@ -918,7 +882,7 @@ elif menu == "Organizations":
 # ADMIN DASHBOARD
 # =========================================================
 
-elif menu == "Admin":
+def admin_page():
 
     st.header("👨‍💼 Admin Dashboard")
 
@@ -1666,7 +1630,7 @@ elif menu == "Admin":
 # PICKUP REQUESTS
 # =========================================================
 
-elif menu in ("Pickup Requests", "My Pickups"):
+def pickups_page():
 
     st.header(
         "🚚 My Pickups" if role == "VOLUNTEER" else "🚚 Pickup Requests"
@@ -2196,3 +2160,60 @@ elif menu in ("Pickup Requests", "My Pickups"):
                         str(e)
                     )
 
+
+# =========================================================
+# MENU (each role sees only its own pages: see app/navigation.py)
+# =========================================================
+
+PAGE_FUNCTIONS = {
+    "home": home_page,
+    "my-restaurant": my_restaurant_page,
+    "my-organization": my_organization_page,
+    "available-food": available_food_page,
+    "donations": donations_page,
+    "pickups": pickups_page,
+    "restaurants": restaurants_page,
+    "organizations": organizations_page,
+    "admin": admin_page,
+    "user-access": user_access_page,
+}
+
+
+def only_for_this_role(path, page_function):
+    """Extra safety: never draw a page that is not in this role's menu."""
+    def guarded_page():
+        if path not in pages_for(role):
+            st.error("You do not have access to this page.")
+            st.stop()
+        page_function()
+
+    return guarded_page
+
+
+def build_menu():
+    return {
+        section: [
+            st.Page(
+                only_for_this_role(path, PAGE_FUNCTIONS[path]),
+                title=title_for(role, path),
+                icon=PAGES[path][1],
+                url_path=path,
+                default=(path == "home"),
+            )
+            for path in paths
+        ]
+        for section, paths in MENU[role].items()
+    }
+
+
+current_page = st.navigation(build_menu(), position="sidebar")
+
+st.sidebar.divider()
+st.sidebar.markdown(
+    f"**{user['full_name'] or user['email']}**  \n"
+    f"{ROLE_LABELS[role]}"
+)
+logout_button()
+st.sidebar.caption(privacy_link_markdown())
+
+current_page.run()

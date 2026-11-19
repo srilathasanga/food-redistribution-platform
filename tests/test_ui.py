@@ -8,7 +8,9 @@ from datetime import timedelta
 
 import pytest
 from streamlit.testing.v1 import AppTest
+from streamlit.util import calc_hash
 
+from app.navigation import pages_for
 from app.user_service import approve_user, get_user, request_access
 
 ADMIN = "lead@church.org"
@@ -20,15 +22,28 @@ def dev_login(monkeypatch):
     monkeypatch.setenv("ADMIN_EMAILS", ADMIN)
 
 
+def go_to(at, page):
+    """Open a menu page by its address (see app/navigation.py).
+
+    AppTest cannot click st.navigation links, so set the page directly.
+    """
+    at._page_hash = calc_hash(page)
+    return at.run()
+
+
 def open_app(email=None, page=None):
     at = AppTest.from_file("app.py", default_timeout=30)
     if email:
         at.session_state["dev_email"] = email
     at.run()
     if page:
-        at.sidebar.radio[0].set_value(page).run()
+        go_to(at, page)
     assert not at.exception, at.exception
     return at
+
+
+def signed_in(at):
+    return "Log out" in [b.label for b in at.sidebar.button]
 
 
 def all_text(at):
@@ -48,15 +63,16 @@ def make_user(email, role):
 def test_signed_out_visitor_sees_login_only():
     at = open_app()
     assert "Email to sign in as" in [t.label for t in at.text_input]
-    assert not at.sidebar.radio  # no menu before login
+    assert not signed_in(at)  # no menu before login
 
 
 def test_admin_can_open_every_page():
     at = open_app(ADMIN)
-    pages = at.sidebar.radio[0].options
-    assert "User Access" in pages and "Admin" in pages
+    assert signed_in(at)
+    pages = pages_for("ADMIN")
+    assert "user-access" in pages and "admin" in pages
     for page in pages:
-        at.sidebar.radio[0].set_value(page).run()
+        go_to(at, page)
         assert not at.exception, (page, at.exception)
         assert not at.error, (page, [e.value for e in at.error])
 
@@ -76,7 +92,7 @@ def test_new_person_requests_access_and_waits():
 
 def test_admin_approves_from_user_access_page():
     request_access("vol@example.com", "Ravi", "9222222222", "Hyd", "VOLUNTEER")
-    at = open_app(ADMIN, "User Access")
+    at = open_app(ADMIN, "user-access")
     [approve] = [b for b in at.button if b.label == "Approve"]
     approve.click().run()
     assert not at.exception
@@ -87,10 +103,8 @@ def test_admin_approves_from_user_access_page():
 
 def test_donor_registers_restaurant_and_posts_food(now):
     make_user("donor@example.com", "DONOR")
-    at = open_app("donor@example.com", "My Restaurant")
-    assert at.sidebar.radio[0].options == [
-        "Home", "My Restaurant", "Food Donations"
-    ]
+    assert pages_for("DONOR") == ["home", "my-restaurant", "donations"]
+    at = open_app("donor@example.com", "my-restaurant")
     inputs = {t.label: t for t in at.text_input}
     inputs["Restaurant / kitchen name"].set_value("St. Mark's Kitchen")
     at.text_area[0].set_value("12 Church Road")
@@ -98,7 +112,7 @@ def test_donor_registers_restaurant_and_posts_food(now):
     assert not at.exception
     assert get_user("donor@example.com")["restaurant_id"] is not None
 
-    at.sidebar.radio[0].set_value("Food Donations").run()
+    go_to(at, "donations")
     assert at.selectbox[0].options == [
         f"St. Mark's Kitchen (ID: {get_user('donor@example.com')['restaurant_id']})"
     ]
@@ -115,10 +129,12 @@ def test_donor_registers_restaurant_and_posts_food(now):
 
 def test_donor_cannot_see_admin_pages():
     make_user("donor2@example.com", "DONOR")
-    at = open_app("donor2@example.com")
-    options = at.sidebar.radio[0].options
-    for page in ("Admin", "User Access", "Restaurants", "Pickup Requests"):
-        assert page not in options
+    for page in ("admin", "user-access", "restaurants", "pickups"):
+        assert page not in pages_for("DONOR")
+        # Typing the address of an admin page only shows the donor's Home.
+        at = open_app("donor2@example.com", page)
+        assert "Welcome" in [h.value for h in at.header][0]
+        assert not [b for b in at.button if b.label == "Approve"]
 
 
 def test_organization_sees_only_own_pickups(make_donation, make_pickup,
@@ -126,7 +142,7 @@ def test_organization_sees_only_own_pickups(make_donation, make_pickup,
     make_user("ngo@example.com", "ORGANIZATION")
     # Another organization's pickup must stay hidden.
     make_pickup(make_donation())
-    at = open_app("ngo@example.com", "Pickup Requests")
+    at = open_app("ngo@example.com", "pickups")
     assert "No pickup requests found." in all_text(at)
     assert "must be registered and verified" in all_text(at)
     assert not [b for b in at.button if b.label == "✅ Accept Pickup"]
@@ -142,7 +158,7 @@ def test_volunteer_marks_assigned_pickup_delivered(make_donation, make_pickup):
     assign_volunteer(pickup_id, volunteer_id)
     make_pickup(make_donation(food_name="Not mine"))
 
-    at = open_app("vol2@example.com", "My Pickups")
+    at = open_app("vol2@example.com", "pickups")
     assert len(at.expander) == 1
     [picked] = [b for b in at.button if b.label == "📦 Mark Picked Up"]
     picked.click().run()
@@ -165,19 +181,19 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
     pickup_id = make_pickup(make_donation())
 
     at = open_app(ADMIN)
-    for page in at.sidebar.radio[0].options:
-        at.sidebar.radio[0].set_value(page).run()
+    for page in pages_for("ADMIN"):
+        go_to(at, page)
         assert not at.exception, (page, at.exception)
         assert not at.error, (page, [e.value for e in at.error])
 
     # Verify the pending organization on the Admin page.
-    at.sidebar.radio[0].set_value("Admin").run()
+    go_to(at, "admin")
     [verify] = [b for b in at.button if b.key == f"verify_{pending_org}"]
     verify.click().run()
     assert "verified successfully" in all_text(at)
 
     # Accept the pickup, then assign the volunteer.
-    at.sidebar.radio[0].set_value("Pickup Requests").run()
+    go_to(at, "pickups")
     [accept] = [b for b in at.button if b.key == f"accept_{pickup_id}"]
     accept.click().run()
     [assign] = [b for b in at.button
@@ -194,7 +210,7 @@ def test_privacy_page_is_public():
     assert not at.exception, at.exception
     assert "Privacy policy" in [t.value for t in at.title]
     assert "never sell" in all_text(at)
-    assert not at.sidebar.radio  # no login, no menu
+    assert not signed_in(at)  # no login, no menu
 
 
 def test_login_screen_links_to_privacy_policy():
