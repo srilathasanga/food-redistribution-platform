@@ -266,6 +266,8 @@ Tables are created automatically when the app starts (`app/schema.py`). This is 
 
 ## 🏗️ How the app is deployed
 
+> **Running the app day to day?** See [HANDOVER.md](HANDOVER.md): what the owner manages, everyday tasks, what to do if something breaks, and the monthly backup.
+
 ```text
 Browser ──► Streamlit app (Streamlit Community Cloud)
               │  app.py  ─►  app/backend.py  ─►  app/*_service.py
@@ -294,15 +296,15 @@ A new person signs in, picks a role, and waits; an admin approves them under **U
 
 Contact details of others are for admins only, with one exception: a volunteer sees the delivery address and contact of the organization **only for their own active pickups**. This is enforced in the database query (`get_volunteer_pickups` in `app/pickup_service.py`), not just hidden on screen. A volunteer has one active pickup at a time.
 
-### Google sign-in is in "Testing" mode: adding people
+### Who can sign in: adding people
 
-While the Google sign-in is in **Testing** mode, Google only lets listed test users sign in (up to 100). For each new person:
+The Google sign-in is published (**In production**). Anyone can sign in with Google. New people are approved by the ministry admin before they can use the app.
 
-1. Google Cloud console → **Google Auth Platform → Audience → Test users** → **Add users** → their Gmail address.
-2. They open the app and sign in with that Gmail, then choose how they want to help.
-3. An admin approves them under **User access** (the page shows this reminder too).
+1. A new person opens the app and signs in with their Google account.
+2. They tell us their name, phone, city and how they want to help (donor, organization or volunteer). Until approved they only see a "thanks, please wait" screen.
+3. An admin approves them under **User access** (or switches access off later).
 
-If someone is not on the test-user list, Google refuses them and the app is never told why; the sign-in screen therefore always says "Can't sign in? Ask the ministry admin to add your Gmail."
+Admins listed in `ADMIN_EMAILS` are approved automatically. Nobody needs to be added in Google Cloud any more.
 
 ### Privacy policy
 
@@ -390,7 +392,7 @@ Then run `streamlit run app.py`, open http://localhost:8501 and sign in as `you@
 
 1. In [Google Cloud Console](https://console.cloud.google.com) (ministry account), create a project.
 2. **Google Auth Platform → Branding**: app name "Food Redistribution Platform", support email, and **Privacy policy link** `https://YOUR-APP.streamlit.app/?page=privacy`.
-3. **Google Auth Platform → Audience**: External. Leave it in **Testing** for the pilot and add each person under **Test users** (see "Google sign-in is in Testing mode" above). Publishing comes later, after the pilot.
+3. **Google Auth Platform → Audience**: External, **published (In production)**, so anyone with a Google account can sign in; the app's own approval step decides who gets in (see "Who can sign in" above).
 4. **Google Auth Platform → Clients → Create client** → Web application. Under *Authorized redirect URIs* add `https://YOUR-APP.streamlit.app/oauth2callback` (and `http://localhost:8501/oauth2callback` for local testing).
 5. Copy the client ID and secret.
 6. Make a cookie secret: `python -c "import secrets; print(secrets.token_hex(32))"`.
@@ -407,7 +409,7 @@ Once the new version works, suspend or delete the old Render web service and dat
 
 ### 5. Back up
 
-Run a monthly backup: `pg_dump --no-owner --no-acl "NEON_DATABASE_URL" > backup-YYYY-MM.sql`, and keep it in the ministry's Google Drive.
+Run a monthly backup and keep it in a private folder in the ministry's Google Drive: step by step in [HANDOVER.md](HANDOVER.md) (section e).
 
 ## ✅ Go-live checklist
 
@@ -424,7 +426,7 @@ Do these in order, on the day the pilot starts.
 
    Admins listed in `ADMIN_EMAILS` are created again automatically at their first sign-in; everyone else simply asks for access again.
 3. **Merge and push.** Merge `stabilize-and-secure` into `main` (through the pull request) and push. Streamlit Cloud redeploys from `main`.
-4. **Sign in and check.** On the live address: open `/?page=privacy` without signing in; sign in as an admin; add one test user in Google (Testing mode), let them ask for access and approve them; share one food item, request it, accept it, assign a volunteer, mark it picked up and delivered. On a phone too.
+4. **Sign in and check.** On the live address: open `/?page=privacy` without signing in; sign in as an admin; let one new person sign in with Google and ask for access, and approve them; share one food item, request it, accept it, assign a volunteer, mark it picked up and delivered. On a phone too.
 5. **Suspend Render.** Once the live app works, suspend (later delete) the old Render web service and database. The old FastAPI service has no login and must not stay online.
 
 ## 🧭 Known gaps

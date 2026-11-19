@@ -11,7 +11,7 @@ from streamlit.util import calc_hash
 from app.navigation import pages_for
 from app.user_service import approve_user, get_user, request_access
 
-ADMIN = "lead@church.org"
+ADMIN = "admin@example.org"
 
 
 @pytest.fixture(autouse=True)

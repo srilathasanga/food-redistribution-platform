@@ -37,7 +37,7 @@ def test_people_cannot_ask_to_be_admin():
 
 
 def test_bootstrap_admin_and_disable():
-    admin = ensure_admin("lead@church.org", "Lead")
+    admin = ensure_admin("admin@example.org", "Lead")
     assert (admin["role"], admin["status"]) == ("ADMIN", "ACTIVE")
     request_access("d@example.com", "D", "1", "Hyd", "DONOR")
     approve_user("d@example.com", "DONOR")

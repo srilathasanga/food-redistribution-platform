@@ -5,6 +5,12 @@ families) with verified receiving organizations, using volunteers for
 pickup and delivery. Built by Srilatha as a learning project; being
 prepared for a small ministry pilot.
 
+Owner: Srilatha (sangasrilatha8@gmail.com). She runs the app, the
+Streamlit app, Neon and Google Cloud; `HANDOVER.md` is her plain-English
+guide (handover steps, everyday tasks, fixes, monthly backup). Keep it
+up to date when those steps change. Privacy contact and ministry name:
+`app/privacy.py` (`CONTACT_NAME`, `CONTACT_EMAIL`, `MINISTRY_NAME`).
+
 ## How it is built
 
 - `app.py`: set-up, sign-in and the menu only (small). Order: page config
@@ -52,9 +58,11 @@ or commit secrets.
 
 - Privacy policy URL (for Google Auth Platform → Branding):
   `https://YOUR-APP.streamlit.app/?page=privacy`
-- Google sign-in is in **Testing** mode: each new person must first be
-  added in Google Cloud → Google Auth Platform → Audience → Test users,
-  then sign in and ask for access, then an admin approves them.
+- Google sign-in is published (In production). Anyone can sign in
+  with Google. New people are approved by the ministry admin before
+  they can use the app. New people sign in, choose how they want to help (request access),
+  and wait on a "thanks" screen until an admin approves them under
+  User access. No Google test-user list is needed any more.
 - `redirect_uri` must end in `/oauth2callback` (live address in the
   Streamlit Cloud secrets; localhost in the local file).
 

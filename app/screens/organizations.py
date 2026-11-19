@@ -38,7 +38,7 @@ def _organization_form(form_key, submit_label, defaults=None):
         )
         email = st.text_input("Email (optional)",
                               value=defaults.get("email", ""),
-                              placeholder="e.g. office@hopeshelter.org")
+                              placeholder="e.g. office@example.org")
         address = st.text_area("Address", height=90,
                                placeholder="Where volunteers deliver food")
         city = st.text_input("City", value=defaults.get("city", ""),
