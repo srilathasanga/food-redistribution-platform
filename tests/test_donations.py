@@ -6,6 +6,8 @@ from app.donation_service import (
     add_food_donation,
     get_available_donations,
     get_donation_summary,
+    get_donations_for_restaurant,
+    get_requestable_donations,
 )
 
 
@@ -71,3 +73,31 @@ def test_expired_food_is_not_listed(restaurant_id, now):
         )
     )
     assert get_available_donations() == []
+
+
+def test_donor_sees_own_recent_donations_newest_first(restaurant_id, now):
+    from app.restaurant_service import add_restaurant
+
+    other = add_restaurant("Other Kitchen", "X", "1", "x@example.com",
+                           "Rd", "Hyd")
+    first = add_food_donation(**donation_args(restaurant_id, now))
+    second = add_food_donation(**donation_args(restaurant_id, now,
+                                               food_name="Dal"))
+    add_food_donation(**donation_args(other, now, food_name="Not mine"))
+
+    mine = get_donations_for_restaurant(restaurant_id)
+    assert [row[0] for row in mine] == [second, first]
+    assert mine[0][5] == "AVAILABLE"
+    assert get_donations_for_restaurant(restaurant_id, limit=1)[0][0] == second
+
+
+def test_requested_food_is_no_longer_offered(make_donation, make_pickup):
+    free = make_donation(food_name="Still free")
+    taken = make_donation(food_name="Already requested")
+    make_pickup(taken)
+
+    offered = get_requestable_donations()
+    assert [row[0] for row in offered] == [free]
+    assert offered[0][12] == "Hyderabad"  # restaurant city
+    # The older list still shows both (it ignores pickup requests).
+    assert {row[0] for row in get_available_donations()} == {free, taken}

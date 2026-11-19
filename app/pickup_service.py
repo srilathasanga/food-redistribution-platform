@@ -447,3 +447,64 @@ def get_pickup_summary():
         cursor.close()
         conn.close()
 
+
+
+# =========================================================
+# VOLUNTEER'S OWN PICKUPS (read only)
+# =========================================================
+
+def get_volunteer_pickups(volunteer_id):
+    """One volunteer's own pickups, earliest pickup time first.
+
+    Same 13 columns as get_all_pickup_requests(), plus the receiving
+    organization's address, contact person and phone. Those three are
+    filled in ONLY while the pickup is active (ACCEPTED or PICKED_UP);
+    for any other pickup the database returns NULL, so a volunteer never
+    sees an organization's contact details after the job is done.
+    """
+    if volunteer_id is None:
+        raise ValueError("Volunteer is required.")
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT
+                p.pickup_id,
+                f.food_name,
+                f.quantity,
+                f.unit,
+                r.restaurant_name,
+                o.organization_name,
+                p.requested_at,
+                p.pickup_time,
+                p.pickup_status,
+                p.pickup_address,
+                p.notes,
+                p.volunteer_id,
+                v.volunteer_name,
+                CASE WHEN p.pickup_status IN ('ACCEPTED', 'PICKED_UP')
+                     THEN o.address END AS delivery_address,
+                CASE WHEN p.pickup_status IN ('ACCEPTED', 'PICKED_UP')
+                     THEN o.contact_person END AS delivery_contact,
+                CASE WHEN p.pickup_status IN ('ACCEPTED', 'PICKED_UP')
+                     THEN o.phone END AS delivery_phone
+            FROM pickup_requests p
+            JOIN food_donations f
+                ON p.donation_id = f.donation_id
+            JOIN restaurants r
+                ON f.restaurant_id = r.restaurant_id
+            JOIN organizations o
+                ON p.organization_id = o.organization_id
+            LEFT JOIN volunteers v
+                ON p.volunteer_id = v.volunteer_id
+            WHERE p.volunteer_id = %s
+            ORDER BY p.pickup_time, p.pickup_id;
+        """, (volunteer_id,))
+
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()

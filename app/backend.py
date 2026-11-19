@@ -18,6 +18,8 @@ from app.donation_service import (
     add_food_donation,
     get_available_donations,
     get_donation_summary,
+    get_donations_for_restaurant,
+    get_requestable_donations,
 )
 from app.food_risk_service import get_food_risk_analysis
 from app.organization_service import (
@@ -32,6 +34,7 @@ from app.pickup_service import (
     assign_volunteer,
     get_all_pickup_requests,
     get_pickup_summary,
+    get_volunteer_pickups,
     request_pickup,
     update_pickup_status,
 )
@@ -130,6 +133,16 @@ def get_available_donations_from_api():
     return _safe(lambda: {"donations": get_available_donations()})
 
 
+def get_my_donations_from_api(restaurant_id, limit=10):
+    return _safe(lambda: {
+        "donations": get_donations_for_restaurant(restaurant_id, limit)
+    })
+
+
+def get_requestable_donations_from_api():
+    return _safe(lambda: {"donations": get_requestable_donations()})
+
+
 def get_donation_summary_from_api():
     # The UI reads the summary fields directly.
     return _safe(get_donation_summary)
@@ -226,6 +239,12 @@ def get_pickup_requests_from_api(organization_id=None, volunteer_id=None):
             )
         }
     )
+
+
+def get_volunteer_pickups_from_api(volunteer_id):
+    # Delivery address and contact only for this volunteer's ACTIVE
+    # pickups; the query itself enforces this.
+    return _safe(lambda: {"pickups": get_volunteer_pickups(volunteer_id)})
 
 
 def get_pickup_summary_from_api():

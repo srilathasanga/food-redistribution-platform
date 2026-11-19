@@ -1,22 +1,27 @@
 """Shared look and feel: small building blocks every page uses.
 
-Colours live in .streamlit/config.toml ([theme]). This module only says
-WHICH named colour each status gets, plus a few lines of CSS for things
-the theme cannot do (bigger tap targets, tighter phone margins).
+Colours, fonts and sizes live in .streamlit/config.toml ([theme]). This
+module says WHICH named colour each status gets, and holds the ONLY custom
+CSS in the app (_CSS below): text sizes the theme cannot set, white cards
+with a soft shadow, the page banner, coloured stat cards and the sidebar
+highlight.
 
 Building blocks:
     apply_style()        call once at the top of app.py
-    page_header()        title + one line saying what the page is for
-    stat_card()          a number in a card, with an optional button
-    status_badge()       coloured label for a status (text, not colour alone)
+    page_header()        warm banner: icon, title, one line of purpose
+    card()               white card with a soft shadow (use with `with`)
+    grid()               lay cards out in rows that keep order on phones
+    stat_card()          colourful card: icon + big number + label + button
+    status_badge()       coloured label for a status (words, not colour alone)
     badge_markdown()     the same badge, for use inside st.markdown text
-    empty_state()        "nothing here yet" + what to do next
-    section_card()       a rounded card to group related things
+    empty_state()        icon + encouraging sentence + next-step button
+    section_card()       a card with a title, to group related things
     centered_card()      a card in the middle of the page (sign-in)
     friendly_time()      "in 45 min", "2 hrs ago" (India time)
 """
 
 from datetime import datetime
+from itertools import count
 
 import streamlit as st
 
@@ -25,19 +30,23 @@ from app.timeutil import now_local
 # ---------------------------------------------------------------- statuses
 # status -> (friendly words, theme colour, Material icon)
 # Words always carry the meaning; colour and icon only help scanning.
+# Note: in .streamlit/config.toml the "blue" slot is TEAL and "primary"
+# is royal blue.
 
 STATUS_STYLES = {
     # Donations
     "AVAILABLE": ("Available", "green", ":material/check_circle:"),
     "RESERVED": ("Reserved", "yellow", ":material/schedule:"),
     "PICKED_UP": ("Picked up", "blue", ":material/local_shipping:"),
-    "DELIVERED": ("Delivered", "gray", ":material/task_alt:"),
+    "DELIVERED": ("Delivered", "violet", ":material/task_alt:"),
     "EXPIRED": ("Expired", "red", ":material/error:"),
     # Pickup requests
-    "REQUESTED": ("Waiting for volunteer", "yellow", ":material/hourglass_top:"),
-    "ACCEPTED": ("Volunteer assigned", "violet", ":material/directions_walk:"),
+    "REQUESTED": ("Waiting for volunteer", "yellow",
+                  ":material/hourglass_top:"),
+    "ACCEPTED": ("Volunteer assigned", "primary",
+                 ":material/directions_walk:"),
     # Organizations and people
-    "PENDING": ("Waiting for approval", "yellow", ":material/hourglass_top:"),
+    "PENDING": ("Waiting for approval", "gray", ":material/hourglass_top:"),
     "VERIFIED": ("Verified", "green", ":material/verified:"),
     "REJECTED": ("Not approved", "red", ":material/block:"),
     "ACTIVE": ("Active", "green", ":material/check_circle:"),
@@ -46,7 +55,7 @@ STATUS_STYLES = {
     "BUSY": ("On a pickup", "blue", ":material/local_shipping:"),
     # Food urgency (from food_risk_service)
     "HIGH": ("Urgent", "red", ":material/priority_high:"),
-    "MEDIUM": ("Soon", "orange", ":material/schedule:"),
+    "MEDIUM": ("Soon", "yellow", ":material/schedule:"),
     "LOW": ("Plenty of time", "green", ":material/check_circle:"),
 }
 
@@ -73,58 +82,174 @@ def badge_markdown(status):
     return f":{colour}-badge[{icon} {words}]"
 
 
-# ---------------------------------------------------------------- layout
+# ---------------------------------------------------------------- style
+# The only custom CSS in the app. Colours match .streamlit/config.toml.
 
 _CSS = """
 <style>
-/* Easy-to-tap buttons and links (about 44px, the size of a fingertip). */
-.stButton button, .stFormSubmitButton button,
-.stDownloadButton button, .stLinkButton a, .stPageLink a {
-    min-height: 2.75rem;
+/* Text sizes: labels and buttons 17px; nothing smaller than 15px. */
+[data-testid="stWidgetLabel"] p { font-size: 17px; }
+.stButton button p, .stFormSubmitButton button p, .stLinkButton a p,
+.stPageLink a p, .stDownloadButton button p {
+    font-size: 17px; font-weight: 600;
 }
+[data-testid="stCaptionContainer"], [data-testid="stCaptionContainer"] p,
+[data-testid="stMarkdownContainer"] small { font-size: 15px; }
+/* Captions: darker than Streamlit's faded grey so they pass AA (7:1). */
+[data-testid="stCaptionContainer"] { color: #4B5563; opacity: 1; }
+[data-testid="stMetricLabel"] p { font-size: 17px; font-weight: 600; }
+[data-testid="stSidebarNavLink"] span { font-size: 17px; }
+[data-testid="stExpander"] summary p { font-size: 17px; font-weight: 600; }
+[data-testid="stExpander"] details {
+    background: #FFFFFF;
+    box-shadow: 0 2px 10px rgba(31, 42, 55, .06);
+}
+
+/* Buttons: easy to tap, gentle lift on hover. Primary = royal blue:
+   hover #3B5BDB, pressed #2B3FA0 (white text passes AA on all three). */
+.stButton button, .stFormSubmitButton button, .stLinkButton a,
+.stPageLink a, .stDownloadButton button {
+    min-height: 2.6rem;
+    transition: transform .15s ease, box-shadow .15s ease,
+                background-color .15s ease;
+}
+.stButton button:hover, .stFormSubmitButton button:hover,
+.stLinkButton a:hover, .stDownloadButton button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(54, 79, 199, .20);
+}
+[data-testid^="stBaseButton-primary"]:hover {
+    background: #3B5BDB; border-color: #3B5BDB; color: #FFFFFF;
+}
+[data-testid^="stBaseButton-primary"]:active {
+    background: #2B3FA0; border-color: #2B3FA0;
+}
+
+/* Cards and forms: white with a soft shadow; cards lift a little on hover. */
+[class*="st-key-card-"], [class*="st-key-tone-"], [data-testid="stForm"] {
+    background: #FFFFFF;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(31, 42, 55, .06);
+}
+[class*="st-key-card-"], [class*="st-key-tone-"] {
+    transition: transform .15s ease, box-shadow .15s ease;
+}
+[class*="st-key-card-"]:hover, [class*="st-key-tone-"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(54, 79, 199, .12);
+}
+
+/* Stat cards: each in its own soft colour, with a coral accent stripe
+   and coral icon (#F03E3E passes 3:1 on every tint). */
+[class*="st-key-tone-"] { box-shadow: inset 0 4px 0 #FF6B6B,
+                                      0 2px 10px rgba(31, 42, 55, .06); }
+[class*="st-key-tone-royal"]  { background: #EDF2FF; }
+[class*="st-key-tone-green"]  { background: #EBFBEE; }
+[class*="st-key-tone-teal"]   { background: #E6FCF5; }
+[class*="st-key-tone-purple"] { background: #F3F0FF; }
+[class*="st-key-tone-coral"]  { background: #FFF0F0; }
+[class*="st-key-tone-"] [data-testid="stMetricLabel"] span[role="img"] {
+    color: #F03E3E;
+}
+
+/* Page banner: royal-blue gradient (never lighter, so white text passes),
+   white title and text, light-coral icon and a coral stripe. */
+[class*="st-key-banner-"] {
+    background: linear-gradient(135deg, #364FC7 0%, #3B5BDB 100%);
+    border-radius: 20px;
+    padding: 1.1rem 1.4rem 1.1rem 1.6rem;
+    margin-bottom: .5rem;
+    box-shadow: inset 6px 0 0 #FF6B6B;
+}
+[class*="st-key-banner-"] h1 { padding: 0; }
+[class*="st-key-banner-"], [class*="st-key-banner-"] * { color: #FFFFFF; }
+[class*="st-key-banner-"] span[role="img"] { color: #FFA8A8; }
+
+/* Sidebar menu: selected page royal blue with white text; hover #DBE4FF. */
+[data-testid="stSidebarNavLink"] { border-radius: 12px; }
+[data-testid="stSidebarNavLink"]:hover { background: #DBE4FF; }
+[data-testid="stSidebarNavLink"][aria-current="page"],
+[data-testid="stSidebarNavLink"][aria-current="page"]:hover {
+    background: #364FC7;
+}
+[data-testid="stSidebarNavLink"][aria-current="page"] * { color: #FFFFFF; }
+
 /* Phones: use the full width, keep a small margin. */
 @media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] {
-        padding-left: 1rem;
-        padding-right: 1rem;
-        padding-top: 2.5rem;
+        padding: 4.5rem 1rem 2rem 1rem;
     }
 }
 </style>
 """
 
+# Card keys must be unique within one run; restarted by apply_style().
+_counter = count()
+
+
+def _key(prefix):
+    return f"{prefix}-{next(_counter)}"
+
 
 def apply_style():
-    """Add the few style rules the theme cannot express. Call once per run."""
+    """Add the app's small style sheet. Call once, at the top of each run."""
+    global _counter
+    _counter = count()
     st.html(_CSS)
 
 
+# ---------------------------------------------------------------- pieces
+
 def page_header(title, purpose, icon=None):
-    """Page title plus one plain sentence saying what to do here."""
-    st.title(f"{icon} {title}" if icon else title)
-    st.markdown(purpose)
+    """Warm banner at the top of a page: icon, title, and one plain line
+    saying what this page is for."""
+    with st.container(key=_key("banner")):
+        st.title(f"{icon} {title}" if icon else title)
+        st.markdown(purpose)
+
+
+def grid(items, per_row=2):
+    """Yield (column, item) pairs row by row. On a phone the columns
+    stack, and row-by-row keeps the cards in their original order."""
+    for start in range(0, len(items), per_row):
+        columns = st.columns(per_row)
+        for column, item in zip(columns, items[start:start + per_row]):
+            yield column, item
+
+
+def card(tone=None):
+    """A white card with a soft shadow. Use with `with`:
+
+        with ui.card():
+            st.markdown("**Vegetable biryani** · 20 kg")
+
+    tone="royal" / "green" / "teal" / "purple" / "coral" gives a soft
+    coloured card with a coral accent stripe (used for stat cards).
+    """
+    prefix = f"tone-{tone}" if tone else "card"
+    return st.container(border=True, key=_key(prefix))
 
 
 def _action(button_label, page=None, key=None, primary=False):
-    """A full-width link to another page, or a button (returns True if clicked)."""
+    """A full-width link to another page, or a button (True if clicked)."""
     if not button_label:
         return False
     if page is not None:
-        st.page_link(page, label=button_label, icon=":material/arrow_forward:",
-                     width="stretch")
+        st.page_link(page, label=button_label,
+                     icon=":material/arrow_forward:", width="stretch")
         return False
     return st.button(button_label, key=key, width="stretch",
                      type="primary" if primary else "secondary")
 
 
-def stat_card(label, value, caption=None, icon=None,
+def stat_card(label, value, caption=None, icon=None, tone="royal",
               button_label=None, page=None, key=None):
-    """A number in a card, e.g. 'Food available: 12', with an optional
-    button that takes you to the page where you act on it.
+    """A colourful number card: icon + big number + label, with an optional
+    button to the page where you act on it.
 
     Returns True when its button (not a page link) was clicked.
     """
-    with st.container(border=True):
+    with card(tone):
         st.metric(f"{icon} {label}" if icon else label, value)
         if caption:
             st.caption(caption)
@@ -133,12 +258,11 @@ def stat_card(label, value, caption=None, icon=None,
 
 def empty_state(message, icon=":material/inbox:", hint=None,
                 button_label=None, page=None, key=None):
-    """Shown instead of an empty list: what is missing and what to do next.
-
-    Returns True when its button (not a page link) was clicked.
+    """Shown instead of an empty list: an icon, one encouraging sentence,
+    and the next step. Returns True when its button (not a link) was clicked.
     """
-    with st.container(border=True):
-        st.markdown(f"### {icon}")
+    with card():
+        st.markdown(f"## :orange[{icon}]")
         st.markdown(f"**{message}**")
         if hint:
             st.markdown(hint)
@@ -146,12 +270,12 @@ def empty_state(message, icon=":material/inbox:", hint=None,
 
 
 def section_card(title=None, caption=None):
-    """A rounded card that groups related things. Use with `with`:
+    """A card with a title that groups related things. Use with `with`:
 
         with section_card("Today's pickups"):
             st.write(...)
     """
-    box = st.container(border=True)
+    box = card()
     if title:
         box.subheader(title)
     if caption:
@@ -163,12 +287,13 @@ def centered_card(width=560):
     """A card in the middle of the page (sign-in screens). On a phone it
     simply fills the screen width. Use with `with`."""
     outer = st.container(horizontal_alignment="center")
-    return outer.container(border=True, width=width)
+    return outer.container(border=True, width=width, key=_key("card"))
 
 
 # ---------------------------------------------------------------- time
 
-def _to_datetime(value):
+def to_datetime(value):
+    """A datetime from a datetime or an ISO string (None if missing)."""
     if value is None or value == "":
         return None
     if isinstance(value, datetime):
@@ -188,7 +313,7 @@ def friendly_time(value, now=None):
 
     All times are India time (see app/timeutil.py).
     """
-    when = _to_datetime(value)
+    when = to_datetime(value)
     if when is None:
         return "—"
     now = now or now_local()
@@ -209,7 +334,7 @@ def friendly_time(value, now=None):
 
 def clock_time(value):
     """'18 Nov, 3:30 pm'. Shows the year only when it is not this year."""
-    when = _to_datetime(value)
+    when = to_datetime(value)
     if when is None:
         return "—"
     hour = when.strftime("%I").lstrip("0")

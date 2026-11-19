@@ -206,3 +206,81 @@ def get_donation_summary():
         cursor.close()
         conn.close()
 
+
+
+# =========================================================
+# HOME PAGE LISTS (read only)
+# =========================================================
+
+def get_donations_for_restaurant(restaurant_id, limit=10):
+    """One donor's most recent donations, any status, newest first."""
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT
+                donation_id,
+                food_name,
+                quantity,
+                unit,
+                expiry_time,
+                donation_status,
+                created_at
+            FROM food_donations
+            WHERE restaurant_id = %s
+            ORDER BY created_at DESC, donation_id DESC
+            LIMIT %s;
+        """, (restaurant_id, limit))
+
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()
+
+
+def get_requestable_donations():
+    """Food an organization can still ask for: available, not expired,
+    and nobody has an active pickup request for it yet. Soonest expiry
+    first. Same columns as get_available_donations() plus the
+    restaurant's city at the end."""
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute("""
+            SELECT
+                f.donation_id,
+                r.restaurant_name,
+                f.food_name,
+                f.food_category,
+                f.quantity,
+                f.unit,
+                f.prepared_time,
+                f.expiry_time,
+                f.food_type,
+                f.packaging_status,
+                f.pickup_address,
+                f.donation_status,
+                r.city
+            FROM food_donations f
+            JOIN restaurants r
+                ON f.restaurant_id = r.restaurant_id
+            WHERE f.donation_status = 'AVAILABLE'
+              AND f.expiry_time > CURRENT_TIMESTAMP
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM pickup_requests p
+                  WHERE p.donation_id = f.donation_id
+                    AND p.pickup_status IN
+                        ('REQUESTED', 'ACCEPTED', 'PICKED_UP')
+              )
+            ORDER BY f.expiry_time;
+        """)
+
+        return cursor.fetchall()
+
+    finally:
+        cursor.close()
+        connection.close()

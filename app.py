@@ -27,6 +27,7 @@ from app.backend import (
     verify_organization_from_api,
 )
 from app.database import is_configured
+from app.home_pages import show_home
 from app.navigation import MENU, PAGES, pages_for, title_for
 from app.privacy import (
     is_privacy_request,
@@ -35,6 +36,7 @@ from app.privacy import (
 )
 from app.schema import ensure_schema
 from app.timeutil import now_local
+from app import ui
 from app.ui import apply_style
 from app.user_service import (
     ROLES,
@@ -156,59 +158,9 @@ my_organization = (
 # =========================================================
 
 def home_page():
-
-    st.header(f"Welcome, {user['full_name'] or user['email']}")
-    st.caption(ROLE_LABELS[role])
-
-    if is_admin:
-        pending_users = list_users(status="PENDING")
-        pending_orgs = get_pending_organizations_from_api()
-        col1, col2 = st.columns(2)
-        col1.metric("People waiting for access", len(pending_users))
-        col2.metric(
-            "Organizations waiting for verification",
-            len(pending_orgs.get("organizations", [])),
-        )
-        st.info(
-            "Approve people under **User access**, verify organizations "
-            "under **Reports & tools**, and assign volunteers under "
-            "**Pickup requests**."
-        )
-
-    elif role == "DONOR":
-        if my_restaurant:
-            st.info(
-                f"You donate as **{my_restaurant[1]}**. "
-                "Post surplus food under **My donations**."
-            )
-        else:
-            st.warning(
-                "First register your restaurant or kitchen under "
-                "**My restaurant**, then post food under **My donations**."
-            )
-
-    elif role == "ORGANIZATION":
-        if not my_organization:
-            st.warning(
-                "Register your organization under **My organization**. "
-                "An admin will verify it before you can request food."
-            )
-        elif my_organization[8] == "VERIFIED":
-            st.success(
-                f"**{my_organization[1]}** is verified. See **Available food** "
-                "and request a pickup under **Pickup requests**."
-            )
-        else:
-            st.info(
-                f"**{my_organization[1]}** is "
-                f"{my_organization[8].lower()} verification."
-            )
-
-    elif role == "VOLUNTEER":
-        st.info(
-            "Your assigned pickups are under **My pickups**. Mark each one "
-            "picked up and then delivered as you go."
-        )
+    # Each role's home page lives in app/home_pages.py.
+    show_home(user, my_restaurant, my_organization, PAGE_OBJECTS,
+              flash_success)
 
 
 # =========================================================
@@ -431,109 +383,110 @@ def user_access_page():
 
 def restaurants_page():
 
-    st.header("🏪 Restaurant Management")
-
-    st.subheader("Add Restaurant")
-
-    with st.form("restaurant_form"):
-
-        restaurant_name = st.text_input(
-            "Restaurant Name"
-        )
-
-        contact_person = st.text_input(
-            "Contact Person"
-        )
-
-        phone = st.text_input(
-            "Phone"
-        )
-
-        email = st.text_input(
-            "Email"
-        )
-
-        address = st.text_area(
-            "Address"
-        )
-
-        city = st.text_input(
-            "City"
-        )
-
-        submitted = st.form_submit_button(
-            "Add Restaurant"
-        )
-
-        if submitted:
-
-            if not restaurant_name.strip():
-
-                st.error(
-                    "Restaurant name is required."
-                )
-
-            else:
-
-                restaurant_data = {
-                    "restaurant_name": restaurant_name,
-                    "contact_person": contact_person,
-                    "phone": phone,
-                    "email": email,
-                    "address": address,
-                    "city": city
-                }
-
-                result = create_restaurant_from_api(
-                    restaurant_data
-                )
-
-                if "error" in result:
-
-                    st.error(
-                        f"Error creating restaurant: "
-                        f"{result['error']}"
-                    )
-
-                else:
-
-                    flash_success(
-                        f"Restaurant created successfully! "
-                        f"Restaurant ID: "
-                        f"{result['restaurant_id']}"
-                    )
-
-    st.divider()
-
-    st.subheader("Registered Restaurants")
+    ui.page_header(
+        "Restaurants",
+        "Kitchens and restaurants that share their surplus food.",
+        icon=":material/storefront:",
+    )
 
     restaurant_response = get_restaurants_from_api()
-
     if "error" in restaurant_response:
-
-        st.error(
-            restaurant_response["error"]
-        )
-
+        st.error(restaurant_response["error"], icon=":material/error:")
+        restaurants = []
     else:
-
         restaurants = restaurant_response["restaurants"]
 
-        if restaurants:
-
-            for restaurant in restaurants:
-
-                st.write(
-                    f"**{restaurant[1]}** — "
-                    f"{restaurant[6]} "
-                    f"(ID: {restaurant[0]})"
-                )
-
-        else:
-
-            st.info(
-                "No restaurants registered yet."
+    # ---- Add a restaurant (open straight away when the list is empty)
+    with st.expander("Add a restaurant or kitchen",
+                     icon=":material/add_business:",
+                     expanded=not restaurants):
+        with st.form("restaurant_form", clear_on_submit=False):
+            col1, col2 = st.columns(2)
+            restaurant_name = col1.text_input(
+                "Restaurant or kitchen name",
+                placeholder="e.g. Grace Kitchen",
             )
+            contact_person = col2.text_input(
+                "Contact person", placeholder="e.g. Anil Kumar",
+            )
+            col1, col2 = st.columns(2)
+            phone = col1.text_input(
+                "Phone", placeholder="10-digit mobile",
+                help="Volunteers call this number when they arrive.",
+            )
+            email = col2.text_input(
+                "Email (optional)", placeholder="e.g. kitchen@example.com",
+            )
+            address = st.text_area(
+                "Address", placeholder="Street, area and landmark",
+                height=90,
+            )
+            city = st.text_input("City", placeholder="e.g. Hyderabad")
+
+            if st.form_submit_button("Add restaurant", type="primary",
+                                     icon=":material/add:",
+                                     width="stretch"):
+                problems = []
+                if not restaurant_name.strip():
+                    problems.append("Please enter the restaurant or "
+                                    "kitchen name.")
+                digits = "".join(ch for ch in phone if ch.isdigit())
+                if phone.strip() and not 10 <= len(digits) <= 13:
+                    problems.append("Please enter the phone as a 10-digit "
+                                    "mobile number.")
+                if email.strip() and "@" not in email:
+                    problems.append("Please check the email address.")
+                for problem in problems:
+                    st.error(problem, icon=":material/error:")
+
+                if not problems:
+                    result = create_restaurant_from_api({
+                        "restaurant_name": restaurant_name.strip(),
+                        "contact_person": contact_person.strip(),
+                        "phone": phone.strip(),
+                        "email": email.strip(),
+                        "address": address.strip(),
+                        "city": city.strip(),
+                    })
+                    if "error" in result:
+                        st.error(f"Could not add the restaurant: "
+                                 f"{result['error']}",
+                                 icon=":material/error:")
+                    else:
+                        flash_success(
+                            f"{restaurant_name.strip()} was added. Next: "
+                            "share food for it under Food donations."
+                        )
+
+    # ---- The list, as cards
+    if not restaurants:
+        ui.empty_state(
+            "No restaurants yet. Add the first one to start sharing food!",
+            icon=":material/storefront:",
+            hint="Use the form above. Donors can also add their own "
+                 "kitchen when they sign in.",
+        )
+        return
+
+    st.subheader(f"{len(restaurants)} "
+                 + ("restaurant" if len(restaurants) == 1 else "restaurants"))
+    for column, restaurant in ui.grid(restaurants):
+        (_, name, contact_person, phone, email, address, city, status,
+         _created) = restaurant
+        with column, ui.card():
+            st.markdown(f"#### {name}")
+            st.markdown(ui.badge_markdown(status or "ACTIVE"))
+            lines = []
+            if city or address:
+                place = ", ".join(part for part in (address, city) if part)
+                lines.append(f":material/location_on: {place}")
+            if contact_person:
+                lines.append(f":material/person: {contact_person}")
+            if phone:
+                lines.append(f":material/call: [{phone}](tel:{phone})")
+            if email:
+                lines.append(f":material/mail: [{email}](mailto:{email})")
+            st.markdown("  \n".join(lines) or "No details yet.")
 
 
 # =========================================================
@@ -2187,25 +2140,28 @@ def only_for_this_role(path, page_function):
     return guarded_page
 
 
+# url path -> st.Page for this role, so pages can link to each other.
+PAGE_OBJECTS = {}
+
+
 def build_menu():
-    return {
-        section: [
-            st.Page(
+    menu = {}
+    for section, paths in MENU[role].items():
+        menu[section] = []
+        for path in paths:
+            PAGE_OBJECTS[path] = st.Page(
                 only_for_this_role(path, PAGE_FUNCTIONS[path]),
                 title=title_for(role, path),
                 icon=PAGES[path][1],
                 url_path=path,
                 default=(path == "home"),
             )
-            for path in paths
-        ]
-        for section, paths in MENU[role].items()
-    }
+            menu[section].append(PAGE_OBJECTS[path])
+    return menu
 
 
 current_page = st.navigation(build_menu(), position="sidebar")
 
-st.sidebar.divider()
 st.sidebar.markdown(
     f"**{user['full_name'] or user['email']}**  \n"
     f"{ROLE_LABELS[role]}"

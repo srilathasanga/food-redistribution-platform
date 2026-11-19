@@ -8,6 +8,7 @@ from app.pickup_service import (
     assign_volunteer,
     get_all_pickup_requests,
     get_pickup_summary,
+    get_volunteer_pickups,
     request_pickup,
     update_pickup_status,
 )
@@ -148,3 +149,36 @@ def test_pickup_list_filters(make_donation, make_pickup, volunteer_id,
     assert len(get_all_pickup_requests(organization_id=999)) == 0
     mine = get_all_pickup_requests(volunteer_id=volunteer_id)
     assert [row[0] for row in mine] == [pickup_id]
+
+
+def test_volunteer_sees_delivery_details_only_for_own_active_pickups(
+        make_donation, make_pickup, volunteer_id):
+    # A volunteer has one active pickup at a time (busy until delivered),
+    # so finish the first one before assigning the second.
+    done = make_pickup(make_donation(food_name="Dal"))
+    update_pickup_status(done, "ACCEPTED")
+    assign_volunteer(done, volunteer_id)
+    update_pickup_status(done, "PICKED_UP")
+    update_pickup_status(done, "DELIVERED")
+
+    active = make_pickup(make_donation())
+    update_pickup_status(active, "ACCEPTED")
+    assign_volunteer(active, volunteer_id)
+
+    someone_elses = make_pickup(make_donation(food_name="Not mine"))
+    other_volunteer = add_volunteer(
+        volunteer_name="Asha", phone="7000000000",
+        email="asha@example.com", address="Begumpet", city="Hyderabad",
+    )
+    update_pickup_status(someone_elses, "ACCEPTED")
+    assign_volunteer(someone_elses, other_volunteer)
+
+    rows = {row[0]: row for row in get_volunteer_pickups(volunteer_id)}
+    assert set(rows) == {active, done}            # never another's pickup
+    assert rows[active][13:] == ("45 Church Street", "Mary", "8888888888")
+    assert rows[done][13:] == (None, None, None)  # finished: hidden again
+
+
+def test_volunteer_pickups_need_a_volunteer():
+    with pytest.raises(ValueError):
+        get_volunteer_pickups(None)

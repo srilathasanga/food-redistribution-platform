@@ -1,63 +1,81 @@
-# Look and feel of the app. Colours are defined ONCE here; app/ui.py
-# uses these named colours (green, yellow, blue, gray, red...) for badges
-# and charts. Every text/background pair below passes WCAG AA contrast.
+# Look and feel: royal blue + coral, warm and hopeful, easy to read on
+# phones. Colours are defined ONCE here; app/ui.py only picks which named
+# colour each status uses, plus a small style sheet for what the theme
+# cannot do (banner, card shadows, sidebar highlight, coral accents).
 #
-# Status colours:
-#   green  = available / verified / active
-#   yellow = reserved / waiting (amber)
-#   blue   = picked up / on the way
-#   gray   = delivered / finished / switched off
-#   red    = expired / urgent / not approved
+# Contrast (WCAG AA) was checked for every text/background pair:
+#   white on royal blue #364FC7 6.8:1, links on the page 6.5:1,
+#   body text 13.8:1, every badge 5.7:1 or better.
+# Coral #FF6B6B is too light for white text (2.8:1), so it is NEVER a
+# background behind white text. As an icon colour (needs 3:1) it is
+# deepened to #F03E3E on light backgrounds and card tints (3.4:1 or
+# better) and lightened to #FFA8A8 on the blue banner (3.1:1).
+#
+# Status colours (badge = light tint + dark text of the same hue):
+#   green   = available / verified / active
+#   yellow  = reserved / waiting (amber)
+#   primary = volunteer assigned (royal blue)
+#   blue    = picked up. NOTE: the "blue" slot is set to TEAL here,
+#             because royal blue is already the primary colour.
+#   violet  = delivered (purple)
+#   red     = urgent / expired / not approved (a true red, not coral)
+#   gray    = pending / switched off
+#   orange  = coral, for icons only (never for words)
 
 [theme]
 base = "light"
 
-# One warm primary colour: deep "harvest" green (buttons, links, focus).
-primaryColor = "#1E6B4E"
+primaryColor = "#364FC7"          # royal blue: buttons, links, focus
+backgroundColor = "#F8F9FF"       # page
+secondaryBackgroundColor = "#EDF2FF"
+textColor = "#1F2A37"             # dark slate
+borderColor = "#DCE2F5"
+linkColor = "#364FC7"
+linkUnderline = false
 
-# Calm, warm neutrals.
-backgroundColor = "#FBF8F3"
-secondaryBackgroundColor = "#F3EEE6"
-textColor = "#1F2A24"
-borderColor = "#E4DDD2"
-linkColor = "#1E6B4E"
+# Fonts and sizes (approved earlier, unchanged).
+font = "Nunito Sans:https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap, sans-serif"
+headingFont = "Poppins:https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap, sans-serif"
+baseFontSize = 18
+headingFontSizes = ["34px", "24px", "20px", "18px", "18px", "18px"]
+headingFontWeights = [700, 700, 600, 600, 600, 600]
+baseRadius = "14px"
+buttonRadius = "14px"
 
-# Soft, rounded shapes.
-baseRadius = "0.75rem"
-buttonRadius = "0.75rem"
-showSidebarBorder = true
+# Status colours.
+greenColor = "#2B8A3E"
+greenBackgroundColor = "#D3F9D8"
+greenTextColor = "#1E6B2F"
 
-# Status colours (used by st.badge and :color[...] text).
-greenColor = "#2F8F5B"
-greenBackgroundColor = "#DCF2E3"
-greenTextColor = "#14532D"
+yellowColor = "#F59F00"
+yellowBackgroundColor = "#FFEC99"
+yellowTextColor = "#7A4A00"
 
-yellowColor = "#B7791F"
-yellowBackgroundColor = "#FDF0C8"
-yellowTextColor = "#713F12"
+blueColor = "#0CA678"             # teal (see note above)
+blueBackgroundColor = "#C3FAE8"
+blueTextColor = "#0B5D50"
 
-blueColor = "#2F6FD6"
-blueBackgroundColor = "#DCE8FB"
-blueTextColor = "#1E3A8A"
+violetColor = "#7048E8"
+violetBackgroundColor = "#E5DBFF"
+violetTextColor = "#4A2BB0"
 
-grayColor = "#8A8F98"
-grayBackgroundColor = "#E8E6E1"
-grayTextColor = "#374151"
+redColor = "#E03131"
+redBackgroundColor = "#FFE3E3"
+redTextColor = "#A51D1D"
 
-redColor = "#C8423A"
-redBackgroundColor = "#FBE0DD"
-redTextColor = "#7F1D1D"
+grayColor = "#868E96"
+grayBackgroundColor = "#E9ECEF"
+grayTextColor = "#343A40"
 
-orangeColor = "#C2410C"
-orangeBackgroundColor = "#FDE5D2"
-orangeTextColor = "#7C2D12"
+orangeColor = "#F03E3E"           # coral, icons only
+orangeBackgroundColor = "#FFF0F0"
+orangeTextColor = "#F03E3E"
 
-violetColor = "#6D28D9"
-violetBackgroundColor = "#ECE3FB"
-violetTextColor = "#4C1D95"
-
-# Charts use the same status colours, in this order.
-chartCategoricalColors = ["#1E6B4E", "#B7791F", "#2F6FD6", "#8A8F98", "#C8423A", "#6D28D9"]
+# Charts: royal blue first, then the status colours.
+chartCategoricalColors = ["#364FC7", "#F03E3E", "#2B8A3E", "#0CA678", "#7048E8", "#F59F00"]
 
 [theme.sidebar]
-backgroundColor = "#F3EEE6"
+backgroundColor = "#EDF2FF"
+secondaryBackgroundColor = "#DBE4FF"
+textColor = "#1F2A37"
+headingFontSizes = ["24px", "20px", "18px", "17px", "16px", "15px"]
