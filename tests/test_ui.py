@@ -4,8 +4,6 @@ Uses Streamlit's built-in AppTest runner with development login
 (DEV_LOGIN=true), so no Google account is needed.
 """
 
-from datetime import timedelta
-
 import pytest
 from streamlit.testing.v1 import AppTest
 from streamlit.util import calc_hash
@@ -113,30 +111,43 @@ def test_admin_approves_from_user_access_page():
     assert "approved" in all_text(at)
 
 
-def test_donor_registers_restaurant_and_posts_food(now):
+def test_donor_registers_restaurant_and_posts_food():
     make_user("donor@example.com", "DONOR")
     assert pages_for("DONOR") == ["home", "my-restaurant", "donations"]
     at = open_app("donor@example.com", "my-restaurant")
     inputs = {t.label: t for t in at.text_input}
-    inputs["Restaurant / kitchen name"].set_value("St. Mark's Kitchen")
+    inputs["Restaurant or kitchen name"].set_value("St. Mark's Kitchen")
     at.text_area[0].set_value("12 Church Road")
-    at.button[0].click().run()
+    [save] = [b for b in at.button if b.label == "Save my kitchen"]
+    save.click().run()
     assert not at.exception
     assert get_user("donor@example.com")["restaurant_id"] is not None
+    assert "Next:" in all_text(at)  # success says what happens next
 
     go_to(at, "donations")
-    assert at.selectbox[0].options == [
-        f"St. Mark's Kitchen (ID: {get_user('donor@example.com')['restaurant_id']})"
-    ]
-    inputs = {t.label: t for t in at.text_input}
-    inputs["Food Name"].set_value("Chicken Biryani")
-    inputs["Food Category"].set_value("Cooked Meals")
+    assert "Sharing from **St. Mark's Kitchen**" in all_text(at)
+    {t.label: t for t in at.text_input}["What food is it?"].set_value(
+        "Chicken Biryani")
     at.number_input[0].set_value(5)
-    at.date_input[1].set_value((now + timedelta(days=1)).date())
-    [submit] = [b for b in at.button if b.label == "Create Food Donation"]
-    submit.click().run()
+    [share] = [b for b in at.button if b.label == "Share this food"]
+    share.click().run()
     assert not at.exception
     assert "Chicken Biryani" in all_text(at)
+
+
+def test_share_food_form_says_what_to_fix():
+    make_user("donor3@example.com", "DONOR")
+    at = open_app("donor3@example.com", "my-restaurant")
+    {t.label: t for t in at.text_input}[
+        "Restaurant or kitchen name"].set_value("Grace Kitchen")
+    [b for b in at.button if b.label == "Save my kitchen"][0].click().run()
+    go_to(at, "donations")
+    at.text_area[0].set_value("")  # no pickup address
+    [b for b in at.button if b.label == "Share this food"][0].click().run()
+    text = all_text(at)
+    assert "Please say what the food is." in text
+    assert "Please enter how much food there is." in text
+    assert "Please add the pickup address" in text
 
 
 def test_donor_cannot_see_admin_pages():
@@ -145,7 +156,7 @@ def test_donor_cannot_see_admin_pages():
         assert page not in pages_for("DONOR")
         # Typing the address of an admin page only shows the donor's Home.
         at = open_app("donor2@example.com", page)
-        assert "Welcome" in [h.value for h in at.header][0]
+        assert "Good" in at.title[0].value  # "Good morning, Test!"
         assert not [b for b in at.button if b.label == "Approve"]
 
 
@@ -153,15 +164,28 @@ def test_organization_sees_only_own_pickups(make_donation, make_pickup,
                                             verified_org_id):
     make_user("ngo@example.com", "ORGANIZATION")
     # Another organization's pickup must stay hidden.
-    make_pickup(make_donation())
+    make_pickup(make_donation(food_name="Someone else's food"))
     at = open_app("ngo@example.com", "pickups")
-    assert "No pickup requests found." in all_text(at)
     assert "must be registered and verified" in all_text(at)
-    assert not [b for b in at.button if b.label == "✅ Accept Pickup"]
+    assert "Someone else's food" not in all_text(at)
+    assert not [b for b in at.button if (b.key or "").startswith("accept_")]
+
+
+def test_verified_organization_can_request_food(make_donation,
+                                                verified_org_id):
+    from app.user_service import link_organization
+
+    make_user("hope@example.com", "ORGANIZATION")
+    link_organization("hope@example.com", verified_org_id)
+    make_donation(food_name="Fresh Bread")
+    at = open_app("hope@example.com", "available-food")
+    assert "Fresh Bread" in all_text(at)
+    assert [b for b in at.button if b.label == "Request this food"]
 
 
 def test_volunteer_marks_assigned_pickup_delivered(make_donation, make_pickup):
     from app.pickup_service import assign_volunteer, update_pickup_status
+    from tests.conftest import query_one
 
     make_user("vol2@example.com", "VOLUNTEER")
     volunteer_id = get_user("vol2@example.com")["volunteer_id"]
@@ -171,15 +195,20 @@ def test_volunteer_marks_assigned_pickup_delivered(make_donation, make_pickup):
     make_pickup(make_donation(food_name="Not mine"))
 
     at = open_app("vol2@example.com", "pickups")
-    assert len(at.expander) == 1
-    [picked] = [b for b in at.button if b.label == "📦 Mark Picked Up"]
+    assert "Not mine" not in all_text(at)
+    assert "45 Church Street" in all_text(at)  # delivery address shown
+    [picked] = [b for b in at.button if b.key == f"progress_{pickup_id}"]
+    assert picked.label == "Picked up"
     picked.click().run()
-    [delivered] = [b for b in at.button if b.label == "🚚 Mark Delivered"]
+    [delivered] = [b for b in at.button if b.key == f"progress_{pickup_id}"]
+    assert delivered.label == "Delivered"
     delivered.click().run()
     assert not at.exception
-    assert "DELIVERED" in all_text(at)
+    assert "Thank you for serving" in all_text(at)
+    assert query_one("SELECT pickup_status FROM pickup_requests "
+                     "WHERE pickup_id = %s;", (pickup_id,))[0] == "DELIVERED"
     # No request form for volunteers.
-    assert not [b for b in at.button if b.label == "🚚 Request Pickup"]
+    assert not [b for b in at.button if b.label == "Send request"]
 
 
 def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
@@ -193,12 +222,13 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
     pickup_id = make_pickup(make_donation())
 
     at = open_app(ADMIN)
+    assert "Urgent Curry" in all_text(at)  # urgent food on Home
     for page in pages_for("ADMIN"):
         go_to(at, page)
         assert not at.exception, (page, at.exception)
         assert not at.error, (page, [e.value for e in at.error])
 
-    # Verify the pending organization on the Admin page.
+    # Verify the pending organization on Reports & tools.
     go_to(at, "admin")
     [verify] = [b for b in at.button if b.key == f"verify_{pending_org}"]
     verify.click().run()

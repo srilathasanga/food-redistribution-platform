@@ -7,186 +7,174 @@ from app.backend import (
     create_organization_from_api,
     get_verified_organizations_from_api,
 )
-from app.user_service import (
-    link_organization,
-)
+from app.screens.kitchens import contact_problems
+from app.user_service import link_organization
 
-flash_success = ui.flash_success
+ORGANIZATION_TYPES = ["NGO", "Charity", "Food Bank", "Community Organization",
+                      "Home or shelter", "Church", "Other"]
 
+
+def _organization_form(form_key, submit_label, defaults=None):
+    """The add-an-organization form. Returns the checked details, or None."""
+    defaults = defaults or {}
+    with st.form(form_key):
+        col1, col2 = st.columns(2)
+        name = col1.text_input("Organization name",
+                               placeholder="e.g. Hope Shelter")
+        organization_type = col2.selectbox("Type of organization",
+                                           ORGANIZATION_TYPES)
+        col1, col2 = st.columns(2)
+        contact_person = col1.text_input(
+            "Contact person", value=defaults.get("contact_person", ""),
+            placeholder="e.g. Sister Mary",
+        )
+        phone = col2.text_input(
+            "Phone", value=defaults.get("phone", ""),
+            placeholder="10-digit mobile",
+            help="Volunteers call this number when they deliver food.",
+        )
+        email = st.text_input("Email (optional)",
+                              value=defaults.get("email", ""),
+                              placeholder="e.g. office@hopeshelter.org")
+        address = st.text_area("Address", height=90,
+                               placeholder="Where volunteers deliver food")
+        city = st.text_input("City", value=defaults.get("city", ""),
+                             placeholder="e.g. Hyderabad")
+        if not st.form_submit_button(submit_label, type="primary",
+                                     icon=":material/add:", width="stretch"):
+            return None
+
+        problems = [] if name.strip() else ["Please enter the organization "
+                                            "name."]
+        if not address.strip():
+            problems.append("Please enter the address, so volunteers know "
+                            "where to deliver.")
+        problems += contact_problems(phone, email)
+        for problem in problems:
+            st.error(problem, icon=":material/error:")
+        if problems:
+            return None
+        return {
+            "organization_name": name.strip(),
+            "organization_type": organization_type,
+            "contact_person": contact_person.strip(),
+            "phone": phone.strip(),
+            "email": email.strip(),
+            "address": address.strip(),
+            "city": city.strip(),
+        }
+
+
+def _organization_lines(organization):
+    (_, _name, contact_person, phone, email, address, city,
+     organization_type) = organization[:8]
+    lines = []
+    if organization_type:
+        lines.append(f":material/category: {organization_type}")
+    place = ", ".join(part for part in (address, city) if part)
+    if place:
+        lines.append(f":material/location_on: {place}")
+    if contact_person:
+        lines.append(f":material/person: {contact_person}")
+    if phone:
+        lines.append(f":material/call: [{phone}](tel:{phone})")
+    if email:
+        lines.append(f":material/mail: [{email}](mailto:{email})")
+    return "  \n".join(lines)
+
+
+# ---------------------------------------------------------------- organization
 
 def my_organization_page(ctx):
-    user = ctx.user
-    my_organization = ctx.my_organization
+    ui.page_header("My organization",
+                   "The home, shelter or charity that receives food.",
+                   icon=":material/apartment:")
 
-    st.header("🏢 My Organization")
-
-    if my_organization:
-        st.write(f"**Name:** {my_organization[1]}")
-        st.write(f"**Type:** {my_organization[7]}")
-        st.write(f"**Contact person:** {my_organization[2]}")
-        st.write(f"**Phone:** {my_organization[3]}")
-        st.write(f"**Address:** {my_organization[5]}, {my_organization[6]}")
-        status = my_organization[8]
+    organization = ctx.my_organization
+    if organization:
+        status, reason = organization[8], organization[10]
+        with ui.card():
+            st.markdown(f"#### {organization[1]}")
+            st.markdown(ui.badge_markdown(status))
+            st.markdown(_organization_lines(organization))
         if status == "VERIFIED":
-            st.success("Verified. You can request food pickups.")
+            st.success("You're verified. You can request food any time.",
+                       icon=":material/verified:")
+            if st.button("Find food to request", type="primary",
+                         icon=":material/restaurant:", width="stretch"):
+                st.switch_page(ctx.pages["available-food"])
         elif status == "REJECTED":
-            st.error(
-                "Not approved. Reason: "
-                f"{my_organization[10] or 'not given'}. "
-                "Please contact an admin."
-            )
+            st.error(f"Not approved. Reason: {reason or 'not given'}. "
+                     "Please contact the ministry admin.",
+                     icon=":material/block:")
         else:
-            st.info("Waiting for an admin to verify your organization.")
-    else:
-        st.write("Register the organization that will receive food.")
-        with st.form("my_organization_form"):
-            organization_name = st.text_input("Organization name")
-            contact_person = st.text_input(
-                "Contact person", value=user["full_name"] or ""
-            )
-            phone = st.text_input("Phone", value=user["phone"] or "")
-            email = st.text_input("Email", value=user["email"])
-            address = st.text_area("Address")
-            city = st.text_input("City", value=user["city"] or "")
-            organization_type = st.selectbox(
-                "Organization type",
-                ["NGO", "Charity", "Food Bank",
-                 "Community Organization", "Other"],
-            )
-            if st.form_submit_button("Register", type="primary"):
-                if not organization_name.strip():
-                    st.error("Organization name is required.")
-                else:
-                    result = create_organization_from_api({
-                        "organization_name": organization_name,
-                        "contact_person": contact_person,
-                        "phone": phone,
-                        "email": email,
-                        "address": address,
-                        "city": city,
-                        "organization_type": organization_type,
-                    })
-                    if "error" in result:
-                        st.error(result["error"])
-                    else:
-                        link_organization(
-                            user["email"], result["organization_id"]
-                        )
-                        flash_success(
-                            "Registered! An admin will verify your "
-                            "organization soon."
-                        )
+            st.info("A coordinator will check your organization soon. "
+                    "You'll be able to request food once it is verified.",
+                    icon=":material/hourglass_top:")
+        st.caption("To change these details, please contact the ministry "
+                   "admin.")
+        return
 
+    st.markdown("Add the organization that receives food. A coordinator "
+                "checks it before you can request food.")
+    user = ctx.user
+    details = _organization_form("my_organization_form",
+                                 "Save my organization", {
+                                     "contact_person": user["full_name"] or "",
+                                     "phone": user["phone"] or "",
+                                     "email": user["email"],
+                                     "city": user["city"] or "",
+                                 })
+    if details:
+        result = create_organization_from_api(details)
+        if "error" in result:
+            st.error(f"Could not save your organization: {result['error']}",
+                     icon=":material/error:")
+        else:
+            link_organization(user["email"], result["organization_id"])
+            ui.flash_success(
+                f"{details['organization_name']} is saved. Next: a "
+                "coordinator verifies it, then you can request food."
+            )
+
+
+# ---------------------------------------------------------------- admin
 
 def organizations_page(ctx):
-
-    st.header("🏢 Organization / NGO Management")
-
-    st.subheader("Register Organization")
-
-    with st.form("organization_form"):
-
-        organization_name = st.text_input(
-            "Organization Name"
-        )
-
-        contact_person = st.text_input(
-            "Contact Person"
-        )
-
-        phone = st.text_input(
-            "Phone"
-        )
-
-        email = st.text_input(
-            "Email"
-        )
-
-        address = st.text_area(
-            "Address"
-        )
-
-        city = st.text_input(
-            "City"
-        )
-
-        organization_type = st.selectbox(
-            "Organization Type",
-            [
-                "NGO",
-                "Charity",
-                "Food Bank",
-                "Community Organization",
-                "Other"
-            ]
-        )
-
-        submitted = st.form_submit_button(
-            "Register Organization"
-        )
-
-        if submitted:
-
-            organization_data = {
-                "organization_name": organization_name,
-                "contact_person": contact_person,
-                "phone": phone,
-                "email": email,
-                "address": address,
-                "city": city,
-                "organization_type": organization_type
-            }
-
-            result = create_organization_from_api(
-                organization_data
-            )
-
-            if "error" in result:
-
-                st.error(
-                    f"Error registering organization: "
-                    f"{result['error']}"
-                )
-
-            else:
-
-                flash_success(
-                    f"Organization registered successfully! "
-                    f"Organization ID: "
-                    f"{result['organization_id']}"
-                )
-
-    st.divider()
-
-    st.subheader("Verified Organizations")
-
-    organization_response = (
-        get_verified_organizations_from_api()
+    ui.page_header(
+        "Organizations",
+        "Homes, shelters and charities that receive food.",
+        icon=":material/groups:",
     )
 
-    if "error" in organization_response:
-
-        st.error(
-            organization_response["error"]
+    # Verified organizations.
+    verified = ui.rows(get_verified_organizations_from_api(),
+                       "organizations")
+    st.subheader(ui.plural(len(verified), "verified organization"))
+    if not verified:
+        ui.empty_state(
+            "No verified organizations yet",
+            icon=":material/groups:",
+            hint="Organizations sign up themselves, or you can add one "
+                 "below. Verify them above.",
         )
+    for column, organization in ui.grid(verified):
+        with column, ui.card():
+            st.markdown(f"#### {organization[1]}")
+            st.markdown(ui.badge_markdown("VERIFIED"))
+            st.markdown(_organization_lines(organization))
 
-    else:
-
-        organizations = organization_response["organizations"]
-
-        if organizations:
-
-            for organization in organizations:
-
-                st.write(
-                    f"**{organization[1]}** — "
-                    f"{organization[2]} — "
-                    f"{organization[6]} — "
-                    f"{organization[7]}"
+    # Add one on someone's behalf (rarely needed).
+    with st.expander("Add an organization", icon=":material/add_business:"):
+        details = _organization_form("organization_form",
+                                     "Add organization")
+        if details:
+            result = create_organization_from_api(details)
+            if "error" in result:
+                st.error(f"Could not add the organization: "
+                         f"{result['error']}", icon=":material/error:")
+            else:
+                ui.flash_success(
+                    f"{details['organization_name']} was added. Next: "
+                    "verify it under Reports & tools."
                 )
-
-        else:
-
-            st.info(
-                "No verified organizations available."
-            )

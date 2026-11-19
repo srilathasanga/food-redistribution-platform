@@ -41,9 +41,14 @@ STATUS_STYLES = {
     "DELIVERED": ("Delivered", "violet", ":material/task_alt:"),
     "EXPIRED": ("Expired", "red", ":material/error:"),
     # Pickup requests
-    "REQUESTED": ("Waiting for volunteer", "yellow",
+    "REQUESTED": ("Waiting to be accepted", "yellow",
                   ":material/hourglass_top:"),
-    "ACCEPTED": ("Volunteer assigned", "primary",
+    "ACCEPTED": ("Accepted", "primary", ":material/thumb_up:"),
+    # Shown instead of ACCEPTED, depending on whether a volunteer is set
+    # (see pickup_status below). Not stored in the database.
+    "NEEDS_VOLUNTEER": ("Needs a volunteer", "yellow",
+                        ":material/person_search:"),
+    "ASSIGNED": ("Volunteer assigned", "primary",
                  ":material/directions_walk:"),
     # Organizations and people
     "PENDING": ("Waiting for approval", "gray", ":material/hourglass_top:"),
@@ -68,6 +73,14 @@ def status_style(status):
     words, colour, icon = STATUS_STYLES.get(code, _UNKNOWN_STYLE)
     return (words or code.replace("_", " ").capitalize() or "Unknown",
             colour, icon)
+
+
+def pickup_status(status, volunteer_id):
+    """What a pickup's badge should say: an accepted pickup either still
+    needs a volunteer or has one."""
+    if status == "ACCEPTED":
+        return "ASSIGNED" if volunteer_id else "NEEDS_VOLUNTEER"
+    return status
 
 
 def status_badge(status):
@@ -359,3 +372,25 @@ def show_flash():
     if "flash" in st.session_state:
         st.success(st.session_state.pop("flash"),
                    icon=":material/check_circle:")
+
+
+def rows(response, key):
+    """The list inside a backend response, or [] after showing its error."""
+    if "error" in response:
+        st.error(response["error"], icon=":material/error:")
+        return []
+    return response.get(key, [])
+
+
+def amount(quantity, unit):
+    """'20 kg', '15.5 kg', '100 pieces'."""
+    quantity = float(quantity)
+    shown = int(quantity) if quantity.is_integer() else quantity
+    return f"{shown} {unit or ''}".strip()
+
+
+def plural(number, word, many=None):
+    """'1 pickup', '3 pickups', '2 people' (with many='people')."""
+    if number == 1:
+        return f"1 {word}"
+    return f"{number} {many or word + 's'}"

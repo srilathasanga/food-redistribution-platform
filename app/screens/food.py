@@ -1,250 +1,245 @@
 """Food: Food donations / My donations, and Available food."""
 
+from datetime import timedelta
+
 import streamlit as st
 
 from app import ui
 from app.backend import (
     create_donation_from_api,
     get_available_donations_from_api,
+    get_my_donations_from_api,
+    get_requestable_donations_from_api,
     get_restaurants_from_api,
 )
+from app.home_pages import organization_is_verified, requestable_food
 from app.timeutil import now_local
 
-flash_success = ui.flash_success
+CATEGORIES = ["Cooked meals", "Rice and curries", "Bread and bakery",
+              "Fruit and vegetables", "Packaged food", "Sweets and snacks",
+              "Other"]
+UNITS = ["kg", "plates", "packets", "boxes", "pieces", "loaves", "litres"]
+FOOD_TYPES = {"VEGETARIAN": "Vegetarian", "NON_VEGETARIAN": "Non-vegetarian"}
+PACKAGING = {"PACKED": "Packed", "UNPACKED": "Not packed"}
 
+# Simple choices instead of date and time pickers (easier on a phone).
+COOKED_HOURS_AGO = {"Just now": 0, "About 1 hour ago": 1,
+                    "About 2 hours ago": 2, "About 3 hours ago": 3,
+                    "4 or more hours ago": 4}
+SAFE_FOR_HOURS = {"1 hour": 1, "2 hours": 2, "3 hours": 3, "4 hours": 4,
+                  "6 hours": 6, "8 hours": 8, "12 hours": 12,
+                  "24 hours": 24}
+
+
+def _urgency(expiry_time, now):
+    """'HIGH' (under 2 hours), 'MEDIUM' (under 6) or None."""
+    hours = (ui.to_datetime(expiry_time) - now).total_seconds() / 3600
+    return "HIGH" if hours < 2 else "MEDIUM" if hours <= 6 else None
+
+
+# ---------------------------------------------------------------- share food
+
+def _share_food_form(restaurant):
+    """The form for one restaurant. Returns the donation details, or None."""
+    restaurant_id, name = restaurant[0], restaurant[1]
+    default_address = ", ".join(part for part in (restaurant[5],
+                                                  restaurant[6]) if part)
+    with st.form(f"donation_form_{restaurant_id}"):
+        col1, col2 = st.columns(2)
+        food_name = col1.text_input("What food is it?",
+                                    placeholder="e.g. Vegetable biryani")
+        category = col2.selectbox("Kind of food", CATEGORIES)
+        col1, col2 = st.columns(2)
+        quantity = col1.number_input("How much?", min_value=0.5, step=0.5,
+                                     value=None, placeholder="e.g. 20")
+        unit = col2.selectbox("Unit", UNITS)
+        col1, col2 = st.columns(2)
+        cooked = col1.selectbox("When was it cooked?",
+                                list(COOKED_HOURS_AGO))
+        safe_for = col2.selectbox(
+            "Safe to eat for about", list(SAFE_FOR_HOURS), index=1,
+            help="From now. After this time the food is no longer offered.",
+        )
+        col1, col2 = st.columns(2)
+        food_type = col1.radio("Vegetarian?", list(FOOD_TYPES),
+                               format_func=FOOD_TYPES.get, horizontal=True)
+        packaging = col2.radio("Packed?", list(PACKAGING),
+                               format_func=PACKAGING.get, horizontal=True)
+        pickup_address = st.text_area(
+            "Where should the volunteer collect it?", value=default_address,
+            height=80, placeholder="Street, area and landmark",
+        )
+        if not st.form_submit_button("Share this food", type="primary",
+                                     icon=":material/volunteer_activism:",
+                                     width="stretch"):
+            return None
+
+    problems = []
+    if not food_name.strip():
+        problems.append("Please say what the food is.")
+    if not quantity:
+        problems.append("Please enter how much food there is.")
+    if not pickup_address.strip():
+        problems.append("Please add the pickup address so the volunteer "
+                        "can find it.")
+    for problem in problems:
+        st.error(problem, icon=":material/error:")
+    if problems:
+        return None
+
+    now = now_local().replace(second=0, microsecond=0)
+    return {
+        "restaurant_id": restaurant_id,
+        "restaurant_name": name,
+        "food_name": food_name.strip(),
+        "food_category": category,
+        "quantity": quantity,
+        "unit": unit,
+        "prepared_time": (now - timedelta(hours=COOKED_HOURS_AGO[cooked])
+                          ).isoformat(),
+        "expiry_time": (now + timedelta(hours=SAFE_FOR_HOURS[safe_for])
+                        ).isoformat(),
+        "safe_for": safe_for,
+        "food_type": food_type,
+        "packaging_status": packaging,
+        "pickup_address": pickup_address.strip(),
+    }
+
+
+def _share_food(restaurants):
+    if len(restaurants) == 1:
+        restaurant = restaurants[0]
+        st.markdown(f":material/storefront: Sharing from **{restaurant[1]}**")
+    else:
+        index = st.selectbox("Which restaurant or kitchen?",
+                             range(len(restaurants)),
+                             format_func=lambda i: restaurants[i][1])
+        restaurant = restaurants[index]
+    details = _share_food_form(restaurant)
+    if not details:
+        return
+    result = create_donation_from_api(details)
+    if "error" in result:
+        st.error(f"Could not share the food: {result['error']}",
+                 icon=":material/error:")
+    else:
+        ui.flash_success(
+            f"Thank you! {details['food_name']} is now offered for "
+            f"{details['safe_for']}. Next: an organization requests it and "
+            "a coordinator sends a volunteer."
+        )
+
+
+# ---------------------------------------------------------------- pages
 
 def donations_page(ctx):
-    user = ctx.user
-    is_admin = ctx.is_admin
-
-    st.header("🍱 Food Donation Management")
-
-    st.subheader("Create Food Donation")
-
-    restaurant_response = get_restaurants_from_api()
-
-    if "error" in restaurant_response:
-
-        st.error(
-            restaurant_response["error"]
-        )
-
-        restaurants = []
-
+    now = now_local()
+    if ctx.is_admin:
+        ui.page_header("Food donations",
+                       "Share food for any kitchen, and see what is "
+                       "waiting to be collected.",
+                       icon=":material/soup_kitchen:")
+        restaurants = ui.rows(get_restaurants_from_api(), "restaurants")
     else:
-
-        restaurants = restaurant_response["restaurants"]
-
-    if not is_admin:
-        # A donor can only post food for their own restaurant.
-        restaurants = [
-            restaurant for restaurant in restaurants
-            if restaurant[0] == user["restaurant_id"]
-        ]
+        ui.page_header("My donations",
+                       "Share surplus food and see what happened to it.",
+                       icon=":material/soup_kitchen:")
+        restaurants = [ctx.my_restaurant] if ctx.my_restaurant else []
 
     if not restaurants:
-
-        st.warning(
-            "No restaurants are available. "
-            "Please register a restaurant first"
-            + (" under **My restaurant**." if not is_admin else ".")
+        ui.empty_state(
+            "First, add the kitchen you share food from",
+            icon=":material/storefront:",
+            hint="You only do this once.",
+            button_label="Add a kitchen",
+            page=ctx.pages["restaurants" if ctx.is_admin
+                           else "my-restaurant"],
         )
+        return
 
+    with st.expander("Share surplus food", icon=":material/add_circle:",
+                     expanded=True):
+        _share_food(restaurants)
+
+    if ctx.is_admin:
+        _all_available_food(now)
     else:
+        _my_donations(ctx.my_restaurant[0], now)
 
-        restaurant_options = {
-            f"{restaurant[1]} (ID: {restaurant[0]})":
-            restaurant[0]
-            for restaurant in restaurants
-        }
 
-        selected_restaurant = st.selectbox(
-            "Restaurant",
-            list(restaurant_options.keys())
+def _my_donations(restaurant_id, now):
+    st.subheader("My recent donations")
+    donations = ui.rows(get_my_donations_from_api(restaurant_id, 20),
+                        "donations")
+    if not donations:
+        ui.empty_state(
+            "You haven't shared any food yet",
+            icon=":material/soup_kitchen:",
+            hint="When you share food, you'll see here when it is "
+                 "requested, picked up and delivered.",
         )
-
-        restaurant_id = restaurant_options[
-            selected_restaurant
-        ]
-
-        with st.form("donation_form"):
-
-            food_name = st.text_input(
-                "Food Name"
+        return
+    for column, donation in ui.grid(donations):
+        (_, food_name, quantity, unit, expiry_time, status, created) = donation
+        expired = (status == "AVAILABLE"
+                   and ui.to_datetime(expiry_time) <= now)
+        with column, ui.card():
+            st.markdown(f"**{food_name}** · {ui.amount(quantity, unit)}")
+            st.markdown(ui.badge_markdown("EXPIRED" if expired else status))
+            st.caption(
+                f"Shared {ui.friendly_time(created, now)} · "
+                + ("expired" if expired else
+                   f"expires {ui.friendly_time(expiry_time, now)}"
+                   if status in ("AVAILABLE", "RESERVED") else
+                   f"best before {ui.clock_time(expiry_time)}")
             )
 
-            food_category = st.text_input(
-                "Food Category"
+
+def _all_available_food(now):
+    food = ui.rows(get_available_donations_from_api(), "donations")
+    requestable = {row[0] for row in
+                   ui.rows(get_requestable_donations_from_api(), "donations")}
+    st.subheader(ui.plural(len(food), "item") + " of food available now")
+    if not food:
+        ui.empty_state("No food is waiting right now",
+                       icon=":material/restaurant:",
+                       hint="Shared food appears here until it is "
+                            "collected or expires.")
+        return
+    for column, donation in ui.grid(food):
+        (donation_id, restaurant, food_name, _category, quantity, unit,
+         _prepared, expiry_time, food_type, _packaging, address,
+         status) = donation
+        urgency = _urgency(expiry_time, now)
+        badges = [ui.badge_markdown(status if donation_id in requestable
+                                    else "REQUESTED")]
+        if urgency:
+            badges.append(ui.badge_markdown(urgency))
+        with column, ui.card():
+            st.markdown(f"**{food_name}** · {ui.amount(quantity, unit)} · "
+                        f"{FOOD_TYPES.get(food_type, food_type)}")
+            st.markdown(" ".join(badges))
+            st.markdown(
+                f":material/storefront: {restaurant}"
+                + (f"  \n:material/location_on: {address}" if address else "")
+                + f"  \n:material/schedule: Expires "
+                f"**{ui.friendly_time(expiry_time, now)}**"
             )
-
-            quantity = st.number_input(
-                "Quantity",
-                min_value=0.01,
-                step=0.5
-            )
-
-            unit = st.selectbox(
-                "Unit",
-                [
-                    "kg",
-                    "litres",
-                    "packets",
-                    "boxes",
-                    "plates"
-                ]
-            )
-
-            prepared_date = st.date_input(
-                "Prepared Date",
-                value=now_local().date()
-            )
-
-            prepared_time = st.time_input(
-                "Prepared Time"
-            )
-
-            expiry_date = st.date_input(
-                "Expiry Date",
-                value=now_local().date()
-            )
-
-            expiry_time = st.time_input(
-                "Expiry Time"
-            )
-
-            food_type = st.selectbox(
-                "Food Type",
-                [
-                    "VEGETARIAN",
-                    "NON_VEGETARIAN"
-                ]
-            )
-
-            packaging_status = st.selectbox(
-                "Packaging Status",
-                [
-                    "PACKED",
-                    "UNPACKED"
-                ]
-            )
-
-            pickup_address = st.text_area(
-                "Pickup Address"
-            )
-
-            submitted = st.form_submit_button(
-                "Create Food Donation"
-            )
-
-            if submitted:
-
-                from datetime import datetime
-
-                prepared_datetime = datetime.combine(
-                    prepared_date,
-                    prepared_time
-                )
-
-                expiry_datetime = datetime.combine(
-                    expiry_date,
-                    expiry_time
-                )
-
-                donation_data = {
-                    "restaurant_id": restaurant_id,
-                    "food_name": food_name,
-                    "food_category": food_category,
-                    "quantity": quantity,
-                    "unit": unit,
-                    "prepared_time": (
-                        prepared_datetime.isoformat()
-                    ),
-                    "expiry_time": (
-                        expiry_datetime.isoformat()
-                    ),
-                    "food_type": food_type,
-                    "packaging_status": packaging_status,
-                    "pickup_address": pickup_address
-                }
-
-                result = create_donation_from_api(
-                    donation_data
-                )
-
-                if "error" in result:
-
-                    st.error(
-                        f"Error creating donation: "
-                        f"{result['error']}"
-                    )
-
-                else:
-
-                    flash_success(
-                        f"Food donation created successfully! "
-                        f"Donation ID: "
-                        f"{result['donation_id']}"
-                    )
-
-    st.divider()
-
-    st.subheader("Available Food Donations")
-
-    try:
-
-        donation_response = (
-            get_available_donations_from_api()
-        )
-
-        if "error" in donation_response:
-
-            st.error(
-                donation_response["error"]
-            )
-
-            donations = []
-
-        else:
-
-            donations = donation_response["donations"]
-
-        if donations:
-
-            for donation in donations:
-
-                st.write(
-                    f"**{donation[2]}** — "
-                    f"{donation[4]} {donation[5]} — "
-                    f"{donation[1]} — "
-                    f"Expires: {donation[7]}"
-                )
-
-        else:
-
-            st.info(
-                "No available food donations."
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"Error loading donations: {e}"
-        )
 
 
 def available_food_page(ctx):
-
-    st.header("🍱 Available Food")
-    donation_response = get_available_donations_from_api()
-    if "error" in donation_response:
-        st.error(donation_response["error"])
-    elif donation_response["donations"]:
-        for donation in donation_response["donations"]:
-            st.write(
-                f"**{donation[2]}** — {donation[4]} {donation[5]} — "
-                f"{donation[1]} — {donation[8].replace('_', ' ').title()} — "
-                f"Expires: {donation[7].replace('T', ' ')[:16]}"
-            )
-        st.caption("Request any of these under **Pickup requests**.")
-    else:
-        st.info("No food is available right now. Please check back later.")
+    ui.page_header("Available food",
+                   "Good food you can request for the people you serve.",
+                   icon=":material/restaurant:")
+    if not ctx.my_organization:
+        ui.empty_state(
+            "First, tell us about your organization",
+            icon=":material/apartment:",
+            hint="A coordinator checks every organization before it can "
+                 "request food.",
+            button_label="Add my organization",
+            page=ctx.pages["my-organization"],
+        )
+        return
+    if organization_is_verified(ctx.my_organization):
+        requestable_food(ctx.my_organization, now_local(), ui.flash_success)

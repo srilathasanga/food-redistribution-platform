@@ -1,4 +1,13 @@
-"""Pickup requests (admin, organization) and My pickups (volunteer)."""
+"""Pickup requests (admin, organization) and My pickups (volunteer).
+
+Who may do what here:
+    admin         sees everything; accepts requests, assigns volunteers,
+                  can mark pickups picked up / delivered, and can request
+                  food on an organization's behalf
+    organization  sees only its own requests
+    volunteer     sees only pickups assigned to them (with the delivery
+                  address and contact only while the pickup is active)
+"""
 
 import streamlit as st
 
@@ -9,8 +18,14 @@ from app.backend import (
     get_available_donations_from_api,
     get_pickup_requests_from_api,
     get_verified_organizations_from_api,
+    get_volunteer_pickups_from_api,
     get_volunteers_from_api,
     update_pickup_status_from_api,
+)
+from app.home_pages import (
+    ACTIVE_FOR_VOLUNTEER,
+    pickup_line,
+    volunteer_card,
 )
 from app.timeutil import now_local
 
@@ -18,6 +33,80 @@ flash_success = ui.flash_success
 
 
 def pickups_page(ctx):
+    now = now_local()
+    if ctx.role == "VOLUNTEER":
+        _volunteer_pickups(ctx, now)
+    elif ctx.role == "ORGANIZATION":
+        _organization_pickups(ctx, now)
+    else:
+        _admin_pickups(ctx, now)
+
+
+# ---------------------------------------------------------------- volunteer
+
+def _volunteer_pickups(ctx, now):
+    ui.page_header("My pickups",
+                   "Collect the food, then deliver it. Tap the big button "
+                   "after each step.",
+                   icon=":material/local_shipping:")
+    if not ctx.user["volunteer_id"]:
+        st.info("Please ask the ministry admin to finish setting up your "
+                "volunteer profile.", icon=":material/info:")
+        return
+    pickups = ui.rows(get_volunteer_pickups_from_api(ctx.user["volunteer_id"]),
+                      "pickups")
+    active = [p for p in pickups if p[8] in ACTIVE_FOR_VOLUNTEER]
+    finished = [p for p in pickups if p[8] not in ACTIVE_FOR_VOLUNTEER]
+
+    if not active:
+        ui.empty_state("No pickups assigned to you right now",
+                       icon=":material/directions_walk:",
+                       hint="A coordinator assigns pickups when food is "
+                            "ready. Thank you for helping!")
+    for number, pickup in enumerate(active, start=1):
+        volunteer_card(number, pickup, now, ui.flash_success)
+
+    if finished:
+        with st.expander(f"Finished ({len(finished)})",
+                         icon=":material/task_alt:"):
+            for pickup in reversed(finished[-20:]):
+                pickup_line(pickup, now)
+
+
+# ---------------------------------------------------------------- organization
+
+def _organization_pickups(ctx, now):
+    ui.page_header("Pickup requests",
+                   "Follow the food you asked for, from request to "
+                   "delivery.",
+                   icon=":material/local_shipping:")
+    organization = ctx.my_organization
+    if not organization or organization[8] != "VERIFIED":
+        st.warning("Your organization must be registered and verified "
+                   "before it can request food.",
+                   icon=":material/hourglass_top:")
+        return
+
+    if st.button("Find food to request", type="primary",
+                 icon=":material/restaurant:", width="stretch"):
+        st.switch_page(ctx.pages["available-food"])
+
+    requests = ui.rows(get_pickup_requests_from_api(
+        organization_id=organization[0]), "pickups")
+    if not requests:
+        ui.empty_state("No pickup requests yet",
+                       icon=":material/local_shipping:",
+                       hint="Request food from Available food and follow "
+                            "it here.")
+    for column, pickup in ui.grid(requests):
+        with column:
+            pickup_line(pickup, now, show_organization=False)
+
+
+# ---------------------------------------------------------------- admin
+
+def _admin_pickups(ctx, now):
+    # Old admin view; regrouped by next action in a later change.
     user = ctx.user
     role = ctx.role
     is_admin = ctx.is_admin

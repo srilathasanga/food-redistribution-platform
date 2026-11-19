@@ -3,89 +3,111 @@
 import streamlit as st
 
 from app import ui
-from app.user_service import (
-    ROLES,
-    approve_user,
-    list_users,
-    set_user_status,
-)
+from app.timeutil import now_local
+from app.user_service import ROLES, approve_user, list_users, set_user_status
 
-flash_success = ui.flash_success
+ROLE_WORDS = {"ADMIN": "Admin", "DONOR": "Donor",
+              "ORGANIZATION": "Organization", "VOLUNTEER": "Volunteer"}
 
+
+# ---------------------------------------------------------------- user access
 
 def user_access_page(ctx):
-    user = ctx.user
-    role = ctx.role
-
-    st.header("🔐 User Access")
-
+    now = now_local()
+    pending = list_users(status="PENDING")
+    ui.page_header(
+        "User access",
+        "Approve new people, and switch access on or off. "
+        + (f"{ui.plural(len(pending), 'person', 'people')} waiting."
+           if pending else "Nobody is waiting."),
+        icon=":material/manage_accounts:",
+    )
     st.info(
         "New people must first be added as test users in Google Cloud → "
         "Google Auth Platform → Audience → Test users.",
         icon=":material/info:",
     )
 
+    # 1. The next action: people waiting for approval.
     st.subheader("Waiting for approval")
-    pending_users = list_users(status="PENDING")
-    if not pending_users:
-        st.success("Nobody is waiting. ✅")
-    for person in pending_users:
-        with st.container(border=True):
-            st.write(
-                f"**{person['full_name']}** · {person['email']} · "
-                f"{person['phone'] or 'no phone'} · {person['city'] or ''}"
+    if not pending:
+        st.success("Nobody is waiting.", icon=":material/task_alt:")
+    for column, person in ui.grid(pending):
+        email = person["email"]
+        with column, ui.card():
+            st.markdown(f"#### {person['full_name'] or email}")
+            st.markdown(ui.badge_markdown("PENDING")
+                        + f" asked to join as "
+                        f"**{ROLE_WORDS.get(person['role'], person['role'])}**")
+            st.markdown(_contact_lines(person))
+            chosen_role = st.selectbox(
+                "Approve as", ROLES, index=ROLES.index(person["role"]),
+                key=f"role_{email}", format_func=ROLE_WORDS.get,
             )
-            st.caption(f"Asked to join as {person['role'].title()}")
-            col1, col2, col3 = st.columns([2, 1, 1])
-            chosen_role = col1.selectbox(
-                "Role",
-                ROLES,
-                index=ROLES.index(person["role"]),
-                key=f"role_{person['email']}",
-                label_visibility="collapsed",
-            )
-            if col2.button("Approve", key=f"approve_{person['email']}",
-                           type="primary"):
+            col1, col2 = st.columns(2)
+            if col1.button("Approve", key=f"approve_{email}",
+                           type="primary", icon=":material/check:",
+                           width="stretch"):
                 try:
-                    approve_user(person["email"], chosen_role)
-                    flash_success(
-                        f"{person['email']} approved as {chosen_role.title()}."
+                    approve_user(email, chosen_role)
+                    ui.flash_success(
+                        f"{person['full_name'] or email} approved as "
+                        f"{ROLE_WORDS[chosen_role]}. Next: they can sign in "
+                        "and start."
                     )
                 except ValueError as error:
-                    st.error(str(error))
-            if col3.button("Decline", key=f"decline_{person['email']}"):
-                set_user_status(person["email"], "DISABLED")
-                flash_success(f"{person['email']} declined.")
+                    st.error(str(error), icon=":material/error:")
+            if col2.button("Decline", key=f"decline_{email}",
+                           icon=":material/block:", width="stretch"):
+                set_user_status(email, "DISABLED")
+                ui.flash_success(f"{person['full_name'] or email} was "
+                                 "declined.")
 
-    st.divider()
-    st.subheader("All users")
-    everyone = list_users()
-    st.dataframe(
-        [
-            {
-                "Email": person["email"],
-                "Name": person["full_name"],
-                "Role": person["role"].title(),
-                "Status": person["status"].title(),
-                "Last login": person["last_login_at"],
-            }
-            for person in everyone
-        ],
-        hide_index=True,
-        use_container_width=True,
-    )
+    # 2. Everyone else, as cards, with a search box.
+    everyone = [p for p in list_users() if p["status"] != "PENDING"]
+    st.subheader(ui.plural(len(everyone), "person", "people"))
+    search = st.text_input("Find a person", placeholder="Name or email",
+                           icon=":material/search:")
+    if search.strip():
+        needle = search.strip().lower()
+        everyone = [p for p in everyone
+                    if needle in (p["full_name"] or "").lower()
+                    or needle in p["email"].lower()]
+        if not everyone:
+            st.caption("Nobody matches that search.")
+    for column, person in ui.grid(everyone):
+        email = person["email"]
+        with column, ui.card():
+            st.markdown(f"#### {person['full_name'] or email}")
+            st.markdown(
+                ui.badge_markdown(person["status"])
+                + f" **{ROLE_WORDS.get(person['role'], person['role'])}**"
+            )
+            lines = [_contact_lines(person)]
+            lines.append(":material/login: Last signed in "
+                         + (ui.friendly_time(person["last_login_at"], now)
+                            if person["last_login_at"] else "never"))
+            st.markdown("  \n".join(line for line in lines if line))
+            if email == ctx.user["email"]:
+                st.caption("This is you.")
+            elif person["status"] == "ACTIVE":
+                if st.button("Switch off access", key=f"off_{email}",
+                             icon=":material/block:", width="stretch"):
+                    set_user_status(email, "DISABLED")
+                    ui.flash_success(f"{person['full_name'] or email} can "
+                                     "no longer sign in.")
+            elif st.button("Switch access back on", key=f"on_{email}",
+                           icon=":material/check:", width="stretch"):
+                set_user_status(email, "ACTIVE")
+                ui.flash_success(f"{person['full_name'] or email} can sign "
+                                 "in again.")
 
-    active_others = [
-        person for person in everyone
-        if person["email"] != user["email"]
-    ]
-    if active_others:
-        st.write("**Change someone's access**")
-        col1, col2, col3 = st.columns([3, 2, 1])
-        target_email = col1.selectbox(
-            "User", [person["email"] for person in active_others]
-        )
-        new_status = col2.selectbox("Status", ["ACTIVE", "DISABLED"])
-        if col3.button("Save", key="save_status"):
-            set_user_status(target_email, new_status)
-            flash_success(f"{target_email} is now {new_status.lower()}.")
+
+def _contact_lines(person):
+    lines = [f":material/mail: [{person['email']}](mailto:{person['email']})"]
+    if person["phone"]:
+        lines.append(f":material/call: [{person['phone']}]"
+                     f"(tel:{person['phone']})")
+    if person["city"]:
+        lines.append(f":material/location_on: {person['city']}")
+    return "  \n".join(lines)

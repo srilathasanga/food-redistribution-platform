@@ -34,14 +34,6 @@ ACTIVE_FOR_VOLUNTEER = ("ACCEPTED", "PICKED_UP")
 
 # ---------------------------------------------------------------- helpers
 
-def _rows(response, key):
-    """The list inside a backend response, or [] after showing the error."""
-    if "error" in response:
-        st.error(response["error"], icon=":material/error:")
-        return []
-    return response.get(key, [])
-
-
 def _greeting(now):
     if now.hour < 12:
         return "Good morning"
@@ -53,16 +45,6 @@ def _greeting(now):
 def _first_name(user):
     name = (user.get("full_name") or "").strip()
     return name.split(" ")[0] if name else "friend"
-
-
-def _amount(quantity, unit):
-    quantity = float(quantity)
-    shown = int(quantity) if quantity.is_integer() else quantity
-    return f"{shown} {unit or ''}".strip()
-
-
-def _plural(count, word):
-    return f"{count} {word}" + ("" if count == 1 else "s")
 
 
 # ---------------------------------------------------------------- entry
@@ -84,8 +66,8 @@ def show_home(user, my_restaurant, my_organization, pages, flash_success):
 # ---------------------------------------------------------------- admin
 
 def _admin_home(user, pages, now):
-    available = _rows(get_available_donations_from_api(), "donations")
-    risks = _rows(get_food_risk_analysis_from_api(), "risk_analysis")
+    available = ui.rows(get_available_donations_from_api(), "donations")
+    risks = ui.rows(get_food_risk_analysis_from_api(), "risk_analysis")
     urgent = sorted(
         (r for r in risks if r["risk_level"] == "HIGH"),
         key=lambda r: r["hours_remaining"],
@@ -97,18 +79,18 @@ def _admin_home(user, pages, now):
     summary = get_pickup_summary_from_api()
     waiting_pickups = 0 if "error" in summary else summary["requested_pickups"]
     people = list_users(status="PENDING")
-    orgs = _rows(get_pending_organizations_from_api(), "organizations")
+    orgs = ui.rows(get_pending_organizations_from_api(), "organizations")
 
     todo = []
     if urgent:
-        todo.append(_plural(len(urgent), "urgent item"))
+        todo.append(ui.plural(len(urgent), "urgent item"))
     if waiting_pickups:
-        todo.append(_plural(waiting_pickups, "pickup") + " to accept")
+        todo.append(ui.plural(waiting_pickups, "pickup") + " to accept")
     if people:
-        todo.append(("1 person" if len(people) == 1
-                     else f"{len(people)} people") + " to approve")
+        todo.append(ui.plural(len(people), "person", "people")
+                    + " to approve")
     if orgs:
-        todo.append(_plural(len(orgs), "organization") + " to verify")
+        todo.append(ui.plural(len(orgs), "organization") + " to verify")
     purpose = (
         "Needs you today: " + ", ".join(todo) + "."
         if todo else "All caught up. Nothing needs you right now."
@@ -124,7 +106,7 @@ def _admin_home(user, pages, now):
             for item in urgent:
                 st.markdown(
                     f"**{item['food_name']}** · "
-                    f"{_amount(item['quantity'], item['unit'])} · expires "
+                    f"{ui.amount(item['quantity'], item['unit'])} · expires "
                     f"**{ui.friendly_time(item['expiry_time'], now)}**  \n"
                     f"{ui.badge_markdown(item['donation_status'])}"
                 )
@@ -157,14 +139,15 @@ def _admin_home(user, pages, now):
     if orgs:
         with ui.card("teal"):
             st.markdown(
-                f":material/verified: **{_plural(len(orgs), 'organization')}"
+                f":material/verified: **{ui.plural(len(orgs), 'organization')}"
                 "** waiting to be verified."
             )
-            st.page_link(pages["admin"], label="Verify organizations",
+            st.page_link(pages["admin"],
+                         label="Verify organizations",
                          icon=":material/arrow_forward:", width="stretch")
     if expired_uncollected:
         st.caption(
-            f"{_plural(len(expired_uncollected), 'donation')} expired "
+            f"{ui.plural(len(expired_uncollected), 'donation')} expired "
             "without being collected."
         )
 
@@ -194,7 +177,7 @@ def _donor_home(user, my_restaurant, pages, now):
         st.switch_page(pages["donations"])
 
     st.subheader("My recent donations")
-    donations = _rows(get_my_donations_from_api(my_restaurant[0]),
+    donations = ui.rows(get_my_donations_from_api(my_restaurant[0]),
                       "donations")
     if not donations:
         ui.empty_state(
@@ -216,7 +199,7 @@ def _donor_home(user, my_restaurant, pages, now):
                 f"best before {ui.clock_time(expiry_time)}")
         with ui.card():
             st.markdown(
-                f"**{food_name}** · {_amount(quantity, unit)}  \n"
+                f"**{food_name}** · {ui.amount(quantity, unit)}  \n"
                 f"{ui.badge_markdown(shown_status)} · {when}"
             )
 
@@ -242,24 +225,49 @@ def _organization_home(user, organization, pages, now, flash_success):
         )
         return
 
-    (organization_id, organization_name, *_rest) = organization
-    city = organization[6]
-    verification = organization[8]
-    if verification != "VERIFIED":
-        with ui.card():
-            st.markdown(f"**{organization_name}**  \n"
-                        f"{ui.badge_markdown(verification)}")
-            st.markdown(
-                "A coordinator will check your organization. Once it is "
-                "verified you can request food here."
-                if verification == "PENDING" else
-                "Your organization was not approved. Please contact the "
-                "ministry admin."
-            )
+    if not organization_is_verified(organization):
         return
+    organization_id = organization[0]
 
-    food = _rows(get_requestable_donations_from_api(), "donations")
-    # Food in the organization's own city first, then soonest expiry.
+    requestable_food(organization, now, flash_success)
+
+    st.subheader("My requests")
+    requests = ui.rows(
+        get_pickup_requests_from_api(organization_id=organization_id),
+        "pickups",
+    )
+    if not requests:
+        st.caption("You haven't requested any food yet.")
+    for pickup in requests[:5]:
+        pickup_line(pickup, now, show_organization=False)
+    if len(requests) > 5:
+        st.page_link(pages["pickups"], label="See all my requests",
+                     icon=":material/arrow_forward:")
+
+
+def organization_is_verified(organization):
+    """True if the organization may request food; otherwise show why not."""
+    organization_name, verification = organization[1], organization[8]
+    if verification == "VERIFIED":
+        return True
+    with ui.card():
+        st.markdown(f"**{organization_name}**  \n"
+                    f"{ui.badge_markdown(verification)}")
+        st.markdown(
+            "A coordinator will check your organization. Once it is "
+            "verified you can request food here."
+            if verification == "PENDING" else
+            "Your organization was not approved. Please contact the "
+            "ministry admin."
+        )
+    return False
+
+
+def requestable_food(organization, now, flash_success):
+    """Food this organization can request now, as cards with a
+    "Request this food" button. Own city first, then soonest expiry."""
+    organization_id, city = organization[0], organization[6]
+    food = ui.rows(get_requestable_donations_from_api(), "donations")
     same_city = (city or "").strip().lower()
     food.sort(key=lambda d: ((d[12] or "").strip().lower() != same_city,
                              d[7]))
@@ -273,24 +281,12 @@ def _organization_home(user, organization, pages, now, flash_success):
             hint="New donations appear here as soon as they are shared. "
                  "Please check again later.",
         )
-    for donation in food:
-        _food_card(donation, organization_id, now, flash_success)
+    for column, donation in ui.grid(food):
+        with column:
+            _food_card(donation, organization_id, now, flash_success)
     if st.session_state.get(_CHOSEN_FOOD):
         _request_dialog(*st.session_state[_CHOSEN_FOOD], organization_id,
                         flash_success)
-
-    st.subheader("My requests")
-    requests = _rows(
-        get_pickup_requests_from_api(organization_id=organization_id),
-        "pickups",
-    )
-    if not requests:
-        st.caption("You haven't requested any food yet.")
-    for pickup in requests[:5]:
-        _pickup_line(pickup, now, show_organization=False)
-    if len(requests) > 5:
-        st.page_link(pages["pickups"], label="See all my requests",
-                     icon=":material/arrow_forward:")
 
 
 def _food_card(donation, organization_id, now, flash_success):
@@ -300,7 +296,7 @@ def _food_card(donation, organization_id, now, flash_success):
     food_type_words = (food_type or "").replace("_", " ").capitalize()
     with ui.card():
         st.markdown(
-            f"**{food_name}** · {_amount(quantity, unit)}"
+            f"**{food_name}** · {ui.amount(quantity, unit)}"
             + (f" · {food_type_words}" if food_type_words else "")
         )
         st.markdown(
@@ -320,7 +316,7 @@ def _food_card(donation, organization_id, now, flash_success):
 
 
 # "When can you collect it?" choices, so nobody fights a date picker.
-_COLLECT_CHOICES = (
+COLLECT_CHOICES = (
     ("As soon as possible (about 30 min)", 30),
     ("In about 1 hour", 60),
     ("In about 2 hours", 120),
@@ -340,7 +336,7 @@ def _request_dialog(donation_id, food_name, expiry_time, pickup_address,
                     organization_id, flash_success):
     now = now_local()
     expiry = ui.to_datetime(expiry_time)
-    choices = [label for label, minutes in _COLLECT_CHOICES
+    choices = [label for label, minutes in COLLECT_CHOICES
                if now + timedelta(minutes=minutes) < expiry]
     st.markdown(f"**{food_name}** expires "
                 f"**{ui.friendly_time(expiry_time, now)}**.")
@@ -355,7 +351,7 @@ def _request_dialog(donation_id, food_name, expiry_time, pickup_address,
     )
     if st.button("Send request", type="primary", icon=":material/send:",
                  width="stretch"):
-        minutes = dict(_COLLECT_CHOICES)[when]
+        minutes = dict(COLLECT_CHOICES)[when]
         result = create_pickup_from_api({
             "donation_id": donation_id,
             "organization_id": organization_id,
@@ -375,9 +371,9 @@ def _request_dialog(donation_id, food_name, expiry_time, pickup_address,
             )
 
 
-def _pickup_line(pickup, now, show_organization=True):
+def pickup_line(pickup, now, show_organization=True):
     (_, food_name, quantity, unit, restaurant, organization, _requested,
-     pickup_time, status, _address, _notes, _volunteer_id,
+     pickup_time, status, _address, _notes, volunteer_id,
      volunteer_name) = pickup[:13]
     with ui.card():
         details = [f"from {restaurant}"]
@@ -388,8 +384,9 @@ def _pickup_line(pickup, now, show_organization=True):
         if volunteer_name and status in ("ACCEPTED", "PICKED_UP"):
             details.append(f"volunteer: {volunteer_name}")
         st.markdown(
-            f"**{food_name}** · {_amount(quantity, unit)}  \n"
-            f"{ui.badge_markdown(status)} · " + " · ".join(details)
+            f"**{food_name}** · {ui.amount(quantity, unit)}  \n"
+            f"{ui.badge_markdown(ui.pickup_status(status, volunteer_id))} · "
+            + " · ".join(details)
         )
 
 
@@ -406,7 +403,7 @@ def _volunteer_home(user, pages, now, flash_success):
 
     # Includes the delivery address and contact, but only for this
     # volunteer's active pickups (enforced in the query).
-    pickups = _rows(get_volunteer_pickups_from_api(user["volunteer_id"]),
+    pickups = ui.rows(get_volunteer_pickups_from_api(user["volunteer_id"]),
                     "pickups")
     active = sorted(
         (p for p in pickups if p[8] in ACTIVE_FOR_VOLUNTEER),
@@ -418,7 +415,7 @@ def _volunteer_home(user, pages, now, flash_success):
 
     ui.page_header(
         f"{_greeting(now)}, {_first_name(user)}!",
-        f"You have {_plural(len(today), 'pickup')} today. Thank you!"
+        f"You have {ui.plural(len(today), 'pickup')} today. Thank you!"
         if today else
         "No pickups for you today. We'll assign you one when food is ready.",
         icon=":material/wb_sunny:",
@@ -429,17 +426,17 @@ def _volunteer_home(user, pages, now, flash_success):
         ui.empty_state("Nothing to collect right now",
                        icon=":material/directions_walk:")
     for number, pickup in enumerate(today, start=1):
-        _volunteer_card(number, pickup, now, flash_success)
+        volunteer_card(number, pickup, now, flash_success)
 
     if later:
         st.subheader("Coming up")
         for pickup in later:
-            _pickup_line(pickup, now)
+            pickup_line(pickup, now)
 
 
-def _volunteer_card(number, pickup, now, flash_success):
+def volunteer_card(number, pickup, now, flash_success):
     (pickup_id, food_name, quantity, unit, restaurant, organization,
-     _requested, pickup_time, status, address, notes, _volunteer_id,
+     _requested, pickup_time, status, address, notes, volunteer_id,
      _name, delivery_address, delivery_contact, delivery_phone) = pickup
     when = ui.to_datetime(pickup_time)
     with ui.card():
@@ -447,10 +444,11 @@ def _volunteer_card(number, pickup, now, flash_success):
             f"### {number}. {ui.clock_time(when).split(', ')[-1]}"
             f" · {ui.friendly_time(when, now)}"
         )
-        st.markdown(ui.badge_markdown(status))
+        st.markdown(ui.badge_markdown(ui.pickup_status(status,
+                                                       volunteer_id)))
         st.markdown(
             f":material/restaurant: **{food_name}** · "
-            f"{_amount(quantity, unit)}  \n"
+            f"{ui.amount(quantity, unit)}  \n"
             f":material/storefront: Collect from **{restaurant}**"
             + (f"  \n:material/location_on: {address}" if address else "")
             + f"  \n:material/home: Deliver to **{organization}**"
