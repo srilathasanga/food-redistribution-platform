@@ -3,6 +3,12 @@
 Order: environment variables (and a local .env file), then Streamlit
 secrets. Nothing secret is ever stored in the code.
 
+Exception: under `streamlit run`, Streamlit reads secrets.toml when the
+server starts, before this file runs, so any top-level secret (such as
+DATABASE_URL) has already replaced the environment value. On a computer
+with the real secrets.toml, the website therefore always uses the real
+database. The snapshot below protects the tests (pytest), not the server.
+
 Why the snapshot below matters: the first time Streamlit reads
 secrets.toml it COPIES each top-level secret into os.environ,
 overwriting what was there. Without the snapshot, a TEST_DATABASE_URL

@@ -42,8 +42,19 @@ The application was developed as a personal project to understand how a real-wor
 
 ```text
 food-redistribution-platform/
-├── app.py                      Streamlit website (pages for each role)
+├── app.py                      Website set-up, sign-in and the menu (small)
 ├── app/
+│   ├── screens/                One file per group of pages
+│   │   ├── kitchens.py         My restaurant (donor), Restaurants (admin)
+│   │   ├── organizations.py    My organization, Organizations (verify)
+│   │   ├── food.py             Share food / My donations, Available food
+│   │   ├── pickups.py          Pickup requests / My pickups
+│   │   ├── people.py           Volunteers, User access
+│   │   └── reports.py          Reports & tools
+│   ├── home_pages.py           Home page for each role
+│   ├── navigation.py           Which role sees which page (one list)
+│   ├── ui.py                   Shared look: banner, cards, badges, CSS
+│   ├── privacy.py              Public privacy policy page
 │   ├── auth.py                 Google login, access requests
 │   ├── backend.py              Functions the pages call
 │   ├── config.py               Settings from env / .env / Streamlit secrets
@@ -51,14 +62,16 @@ food-redistribution-platform/
 │   ├── schema.py               Creates and updates tables
 │   ├── timeutil.py             One clock for the whole app
 │   ├── user_service.py         Users, roles, approvals
-│   ├── donation_service.py
-│   ├── food_risk_service.py
-│   ├── organization_service.py
-│   ├── pickup_service.py
-│   ├── restaurant_service.py
-│   ├── volunteer_service.py
+│   ├── donation_service.py     ┐
+│   ├── food_risk_service.py    │
+│   ├── organization_service.py │ Business rules and SQL
+│   ├── pickup_service.py       │
+│   ├── restaurant_service.py   │
+│   ├── volunteer_service.py    ┘
 │   └── main.py                 Optional FastAPI version (not deployed)
 ├── tests/                      Automated tests (pytest)
+├── dev/ui_preview.py           Design preview with sample data (no database)
+├── .streamlit/config.toml      Colours, fonts and sizes (the theme)
 ├── .streamlit/secrets.toml.example
 ├── create_tables.py
 ├── insert_sample_data.py
@@ -66,6 +79,22 @@ food-redistribution-platform/
 ├── requirements-api.txt        Optional FastAPI
 └── requirements-dev.txt        Tests
 ```
+
+### Look and feel
+
+- **Theme** (`.streamlit/config.toml`): royal blue `#364FC7` for buttons
+  and links, coral accents, Poppins headings and Nunito Sans body text
+  at 18px, rounded corners. Every text/background pair meets WCAG AA
+  contrast; the reasons for each colour are written in the file.
+- **Building blocks** (`app/ui.py`): `page_header` (blue banner),
+  `card`, `stat_card`, `badge_markdown` (status words + icon, never
+  colour alone), `empty_state`, `grid` (keeps cards in order on phones),
+  `status_chart`, `friendly_time` ("in 45 min"). All custom CSS lives in
+  this one file.
+- **Phones first**: checked at 390px wide: no sideways scrolling, no
+  text under 15px, tap targets at least 24px (most 40px+).
+- See every building block with sample data, no database needed:
+  `streamlit run dev/ui_preview.py`.
 
 ## 🔄 Business Workflow
 
@@ -254,27 +283,66 @@ People sign in with Google (Streamlit's built-in `st.login()`). Each person has 
 
 | Role | Who | Can |
 | --- | --- | --- |
-| Admin | Ministry coordinators | Everything: approve people, verify organizations, accept pickups, assign volunteers |
-| Donor | Restaurant, caterer, family | Register their kitchen; post food donations |
-| Organization | NGO, home, charity | Register; once verified, see available food and request pickups for themselves |
+| Admin | Ministry coordinators | Everything: approve people (**User access**), verify organizations (**Organizations**), accept pickups and assign volunteers (**Pickup requests**), add volunteers (**Volunteers**), see **Reports & tools** |
+| Donor | Restaurant, caterer, family | Register their kitchen; share surplus food; follow their donations |
+| Organization | NGO, home, charity | Register; once verified, request available food and follow their requests |
 | Volunteer | Drivers and helpers | See only pickups assigned to them; mark picked up and delivered |
 
-A new person signs in, picks a role, and waits; an admin approves them under **User Access**. Emails listed in `ADMIN_EMAILS` become admins automatically. Phone numbers and addresses of volunteers and others are visible to admins only.
+The menu for each role is listed in one place, `app/navigation.py`. A page that is not in a role's list cannot be opened, even by typing its address.
+
+A new person signs in, picks a role, and waits; an admin approves them under **User access**. Emails listed in `ADMIN_EMAILS` become admins automatically.
+
+Contact details of others are for admins only, with one exception: a volunteer sees the delivery address and contact of the organization **only for their own active pickups**. This is enforced in the database query (`get_volunteer_pickups` in `app/pickup_service.py`), not just hidden on screen. A volunteer has one active pickup at a time.
+
+### Google sign-in is in "Testing" mode: adding people
+
+While the Google sign-in is in **Testing** mode, Google only lets listed test users sign in (up to 100). For each new person:
+
+1. Google Cloud console → **Google Auth Platform → Audience → Test users** → **Add users** → their Gmail address.
+2. They open the app and sign in with that Gmail, then choose how they want to help.
+3. An admin approves them under **User access** (the page shows this reminder too).
+
+If someone is not on the test-user list, Google refuses them and the app is never told why; the sign-in screen therefore always says "Can't sign in? Ask the ministry admin to add your Gmail."
+
+### Privacy policy
+
+The app has a public privacy policy at **`https://YOUR-APP.streamlit.app/?page=privacy`** (on your computer: http://localhost:8501/?page=privacy). It needs no sign-in and works even when the database is down. It is linked from the sign-in screen and the sidebar.
+
+- Paste that address into Google Cloud → **Google Auth Platform → Branding → Privacy policy link**.
+- To change the text, ministry name or contact, edit `app/privacy.py` (`MINISTRY_NAME` and `PRIVACY_POLICY`), and update the date.
 
 ## 🧪 Testing
 
-41 automated tests cover donation validation, organization verification and rejection, the full pickup flow, duplicate and simultaneous pickup requests, India-time checks, volunteer assignment rules, user approval, and every page clicked through as each role (using Streamlit's `AppTest`).
+About 60 automated tests cover donation validation, organization verification and rejection, the full pickup flow, duplicate and simultaneous pickup requests, India-time checks, volunteer assignment rules and what volunteers may see, user approval, which role sees which page, and every page clicked through as each role (using Streamlit's `AppTest`).
 
-The tests **empty every table**, so they need a separate, throw-away database:
+The tests **empty every table**, so they need a separate, throw-away database: a local Postgres database, or a free Neon **branch** made only for testing.
 
-```bash
+```powershell
 pip install -r requirements-dev.txt
-# PowerShell:  $env:TEST_DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/food_test"
-export TEST_DATABASE_URL="postgresql://postgres:PASSWORD@localhost:5432/food_test"
-pytest
+$env:TEST_DATABASE_URL="postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"   # test database ONLY
+python -m pytest      # "pytest" alone may be blocked by Windows Application Control
 ```
 
-Without `TEST_DATABASE_URL` the tests are skipped, so they can never wipe the real database.
+- Set `TEST_DATABASE_URL` **in the same terminal** where you run `pytest`.
+- Without `TEST_DATABASE_URL`, the database tests are skipped (the others still run).
+
+> ⚠️ **Safety: never point `TEST_DATABASE_URL` at the real database.**
+> On a computer whose `.streamlit/secrets.toml` holds the real Neon address,
+> Streamlit copies that address over `DATABASE_URL` the first time any secret
+> is read. Before November 2026 this meant the tests could silently connect to
+> the **real** database and empty it. Two protections now exist:
+>
+> 1. `app/config.py` keeps the settings that existed when the program started,
+>    so `TEST_DATABASE_URL` wins over `secrets.toml`
+>    (proved by `tests/test_settings_safety.py`).
+> 2. Before creating or emptying anything, every database test checks the
+>    **live connection**: its host and database name must match
+>    `TEST_DATABASE_URL` and must **not** match the database in
+>    `secrets.toml` (Neon's `-pooler` address counts as the same database).
+>    Otherwise the whole run stops with "STOPPED to protect real data. No
+>    table was emptied." (`tests/db_safety.py`, used by `tests/conftest.py`).
+>
+> Do not remove or weaken these checks.
 
 ## ⚙️ Configuration
 
@@ -308,6 +376,8 @@ DEV_LOGIN=true
 
 Then run `streamlit run app.py`, open http://localhost:8501 and sign in as `you@example.com`. Optional: `python insert_sample_data.py` adds demo data.
 
+> ⚠️ If this computer has a `.streamlit/secrets.toml` with the **real** Neon address, `streamlit run app.py` works on the **real** data: signing in, sharing food or approving people changes it. With `streamlit run`, **`secrets.toml` wins over `.env` and environment variables** (Streamlit reads it when the server starts). To experiment safely, rename `secrets.toml` to `secrets.toml.off` and put a local or Neon test-branch `DATABASE_URL` in `.env`; rename it back afterwards. (Tests are different: under `pytest`, `TEST_DATABASE_URL` wins and is double-checked, see Testing.)
+
 ## 🚀 Deploying for free (Streamlit Cloud + Neon + Google login)
 
 ### 1. Create the database on Neon
@@ -319,10 +389,13 @@ Then run `streamlit run app.py`, open http://localhost:8501 and sign in as `you@
 ### 2. Set up Google login
 
 1. In [Google Cloud Console](https://console.cloud.google.com) (ministry account), create a project.
-2. **APIs & Services → OAuth consent screen**: External, app name "Food Redistribution Platform", then **Publish app**.
-3. **Credentials → Create credentials → OAuth client ID** → Web application. Under *Authorized redirect URIs* add `https://YOUR-APP.streamlit.app/oauth2callback` (and `http://localhost:8501/oauth2callback` for local testing).
-4. Copy the client ID and secret.
-5. Make a cookie secret: `python -c "import secrets; print(secrets.token_hex(32))"`.
+2. **Google Auth Platform → Branding**: app name "Food Redistribution Platform", support email, and **Privacy policy link** `https://YOUR-APP.streamlit.app/?page=privacy`.
+3. **Google Auth Platform → Audience**: External. Leave it in **Testing** for the pilot and add each person under **Test users** (see "Google sign-in is in Testing mode" above). Publishing comes later, after the pilot.
+4. **Google Auth Platform → Clients → Create client** → Web application. Under *Authorized redirect URIs* add `https://YOUR-APP.streamlit.app/oauth2callback` (and `http://localhost:8501/oauth2callback` for local testing).
+5. Copy the client ID and secret.
+6. Make a cookie secret: `python -c "import secrets; print(secrets.token_hex(32))"`.
+
+In the Streamlit secrets, `redirect_uri` must be the **live** address ending in `/oauth2callback` (the local `secrets.toml` uses `http://localhost:8501/oauth2callback`).
 
 ### 3. Configure Streamlit Community Cloud
 
@@ -335,6 +408,35 @@ Once the new version works, suspend or delete the old Render web service and dat
 ### 5. Back up
 
 Run a monthly backup: `pg_dump --no-owner --no-acl "NEON_DATABASE_URL" > backup-YYYY-MM.sql`, and keep it in the ministry's Google Drive.
+
+## ✅ Go-live checklist
+
+Do these in order, on the day the pilot starts.
+
+1. **Owner saves Streamlit Secrets.** In Streamlit Community Cloud → the app → **Settings → Secrets**, the app owner pastes the real values: `DATABASE_URL` (Neon, pooled), `ADMIN_EMAILS`, and the `[auth]` section with the **live** `redirect_uri` (`https://YOUR-APP.streamlit.app/oauth2callback`). Do **not** set `DEV_LOGIN`. Save.
+2. **Clear test data in Neon.** First make a safety copy: in Neon, create a branch named `before-go-live` from the production branch. Then open the **SQL Editor on the production branch** and run, once:
+
+   ```sql
+   -- PRODUCTION, once, before go-live. Deletes ALL rows in these tables.
+   TRUNCATE pickup_requests, food_donations, restaurants, organizations,
+            volunteers, app_users RESTART IDENTITY CASCADE;
+   ```
+
+   Admins listed in `ADMIN_EMAILS` are created again automatically at their first sign-in; everyone else simply asks for access again.
+3. **Merge and push.** Merge `stabilize-and-secure` into `main` (through the pull request) and push. Streamlit Cloud redeploys from `main`.
+4. **Sign in and check.** On the live address: open `/?page=privacy` without signing in; sign in as an admin; add one test user in Google (Testing mode), let them ask for access and approve them; share one food item, request it, accept it, assign a volunteer, mark it picked up and delivered. On a phone too.
+5. **Suspend Render.** Once the live app works, suspend (later delete) the old Render web service and database. The old FastAPI service has no login and must not stay online.
+
+## 🧭 Known gaps
+
+- **Some checks live only in the forms for now.** These are checked on screen but not yet in the services, so the optional FastAPI app (`app/main.py`) and direct service calls do not enforce them:
+  - an organization must have an address;
+  - shared food must have a quantity and a pickup address;
+  - phone numbers must look like a 10-digit mobile number, and emails must contain `@`;
+  - shared food cannot already be expired (the form only offers future times; `add_food_donation` only checks that expiry is after the prepared time).
+
+  They should move into `app/*_service.py` (raising `ValueError`) with a test for each.
+- A volunteer can have only one active pickup at a time (kept on purpose for the pilot).
 
 ## 🧪 Example End-to-End Scenario
 
