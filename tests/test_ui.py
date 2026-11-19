@@ -16,8 +16,17 @@ ADMIN = "lead@church.org"
 
 @pytest.fixture(autouse=True)
 def dev_login(monkeypatch):
-    monkeypatch.setenv("DEV_LOGIN", "true")
-    monkeypatch.setenv("ADMIN_EMAILS", ADMIN)
+    """Use the local dev login and the test admin, whatever this
+    computer's .streamlit/secrets.toml contains (it may have a Google
+    [auth] section and the real ADMIN_EMAILS)."""
+    import app.auth
+    import app.config
+
+    monkeypatch.setattr(app.auth, "_auth_mode", lambda: "dev")
+    for name, value in (("DEV_LOGIN", "true"), ("ADMIN_EMAILS", ADMIN)):
+        monkeypatch.setenv(name, value)
+        # Start-up values win over secrets.toml (see app/config.py).
+        monkeypatch.setitem(app.config._STARTUP_ENV, name, value)
 
 
 def go_to(at, page):
@@ -27,6 +36,13 @@ def go_to(at, page):
     """
     at._page_hash = calc_hash(page)
     return at.run()
+
+
+# Note: after a button that saves something, the app refreshes itself
+# (ui.flash_success -> st.rerun). Streamlit's AppTest then keeps leftover
+# elements from before the refresh (a real browser does not), so after
+# such an action, open the next page with a fresh open_app(...) instead
+# of go_to(...) on the same session.
 
 
 def open_app(email=None, page=None):
@@ -124,7 +140,7 @@ def test_donor_registers_restaurant_and_posts_food():
     assert get_user("donor@example.com")["restaurant_id"] is not None
     assert "Next:" in all_text(at)  # success says what happens next
 
-    go_to(at, "donations")
+    at = open_app("donor@example.com", "donations")  # fresh, see note above
     assert "Sharing from **St. Mark's Kitchen**" in all_text(at)
     {t.label: t for t in at.text_input}["What food is it?"].set_value(
         "Chicken Biryani")
@@ -141,7 +157,7 @@ def test_share_food_form_says_what_to_fix():
     {t.label: t for t in at.text_input}[
         "Restaurant or kitchen name"].set_value("Grace Kitchen")
     [b for b in at.button if b.label == "Save my kitchen"][0].click().run()
-    go_to(at, "donations")
+    at = open_app("donor3@example.com", "donations")  # fresh, see note above
     at.text_area[0].set_value("")  # no pickup address
     [b for b in at.button if b.label == "Share this food"][0].click().run()
     text = all_text(at)
@@ -201,6 +217,8 @@ def test_volunteer_marks_assigned_pickup_delivered(make_donation, make_pickup):
     [picked] = [b for b in at.button if b.key == f"progress_{pickup_id}"]
     assert picked.label == "Picked up"
     picked.click().run()
+    assert "picked up. Next: deliver it" in all_text(at)
+    at = open_app("vol2@example.com", "pickups")  # fresh, see note above
     [delivered] = [b for b in at.button if b.key == f"progress_{pickup_id}"]
     assert delivered.label == "Delivered"
     delivered.click().run()
@@ -235,10 +253,12 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
     verify.click().run()
     assert "Grace Home is verified" in all_text(at)
 
-    # Accept the pickup, then assign the volunteer.
-    go_to(at, "pickups")
+    # Accept the pickup, then assign the volunteer (fresh sessions after
+    # each saving click, see the note at the top).
+    at = open_app(ADMIN, "pickups")
     [accept] = [b for b in at.button if b.key == f"accept_{pickup_id}"]
     accept.click().run()
+    at = open_app(ADMIN, "pickups")
     [assign] = [b for b in at.button
                 if b.key == f"assign_volunteer_{pickup_id}"]
     assign.click().run()
