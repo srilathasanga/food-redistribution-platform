@@ -3,4 +3,6 @@ streamlit==1.59.0
 psycopg2-binary==2.9.13
 python-dotenv==1.2.3
 Authlib==1.9.6
+# needed by Authlib for Google sign-in on Streamlit Cloud
+httpx==0.28.1
 tzdata==2026.2
