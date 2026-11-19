@@ -15,6 +15,7 @@ PAGES = {
     "pickups": ("Pickup requests", ":material/local_shipping:"),
     "restaurants": ("Restaurants", ":material/store:"),
     "organizations": ("Organizations", ":material/groups:"),
+    "volunteers": ("Volunteers", ":material/directions_walk:"),
     "admin": ("Reports & tools", ":material/insights:"),
     "user-access": ("User access", ":material/manage_accounts:"),
 }
@@ -30,7 +31,7 @@ MENU = {
     "ADMIN": {
         "": ["home"],
         "Food": ["donations", "pickups", "restaurants"],
-        "People": ["organizations", "user-access"],
+        "People": ["organizations", "volunteers", "user-access"],
         "Ministry": ["admin"],
     },
     "DONOR": {"": ["home", "my-restaurant", "donations"]},

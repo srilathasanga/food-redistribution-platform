@@ -6,7 +6,8 @@ from app.navigation import MENU, PAGES, pages_for, title_for
 
 pytestmark = pytest.mark.no_database
 
-ADMIN_ONLY = {"admin", "user-access", "restaurants", "organizations"}
+ADMIN_ONLY = {"admin", "user-access", "restaurants", "organizations",
+              "volunteers"}
 
 
 def test_every_role_starts_at_home_and_pages_exist():

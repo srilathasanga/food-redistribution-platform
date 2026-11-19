@@ -142,7 +142,7 @@ def _admin_home(user, pages, now):
                 f":material/verified: **{ui.plural(len(orgs), 'organization')}"
                 "** waiting to be verified."
             )
-            st.page_link(pages["admin"],
+            st.page_link(pages["organizations"],
                          label="Verify organizations",
                          icon=":material/arrow_forward:", width="stretch")
     if expired_uncollected:

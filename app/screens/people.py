@@ -1,13 +1,103 @@
-"""People: User access (admin only)."""
+"""People: Volunteers and User access (admin only)."""
 
 import streamlit as st
 
 from app import ui
+from app.backend import create_volunteer_from_api, get_volunteers_from_api
+from app.screens.kitchens import contact_problems
 from app.timeutil import now_local
 from app.user_service import ROLES, approve_user, list_users, set_user_status
 
 ROLE_WORDS = {"ADMIN": "Admin", "DONOR": "Donor",
               "ORGANIZATION": "Organization", "VOLUNTEER": "Volunteer"}
+
+
+# ---------------------------------------------------------------- volunteers
+
+def volunteers_page(ctx):
+    volunteers = ui.rows(get_volunteers_from_api(), "volunteers")
+    free = [v for v in volunteers
+            if v[6] == "AVAILABLE" and v[7] == "ACTIVE"]
+    ui.page_header(
+        "Volunteers",
+        f"The people who collect and deliver food. "
+        f"{ui.plural(len(free), 'volunteer')} free right now.",
+        icon=":material/directions_walk:",
+    )
+    st.caption("People who sign up as volunteers get a volunteer profile "
+               "automatically when you approve them under User access.")
+
+    with st.expander("Add a volunteer", icon=":material/person_add:",
+                     expanded=not volunteers):
+        with st.form("volunteer_form"):
+            col1, col2 = st.columns(2)
+            name = col1.text_input("Name", placeholder="e.g. Ravi Teja")
+            phone = col2.text_input(
+                "Phone", placeholder="10-digit mobile",
+                help="Coordinators call this number about pickups.",
+            )
+            col1, col2 = st.columns(2)
+            email = col1.text_input("Email (optional)",
+                                    placeholder="e.g. ravi@example.com")
+            city = col2.text_input("City", placeholder="e.g. Hyderabad")
+            address = st.text_area("Area or address (optional)", height=80,
+                                   placeholder="Helps choose nearby pickups")
+            submitted = st.form_submit_button("Add volunteer",
+                                              type="primary",
+                                              icon=":material/add:",
+                                              width="stretch")
+        if submitted:
+            problems = []
+            if not name.strip():
+                problems.append("Please enter the volunteer's name.")
+            if not phone.strip():
+                problems.append("Please enter a phone number, so "
+                                "coordinators can reach them.")
+            if not city.strip():
+                problems.append("Please enter the city.")
+            problems += contact_problems(phone, email)
+            for problem in problems:
+                st.error(problem, icon=":material/error:")
+            if not problems:
+                result = create_volunteer_from_api({
+                    "volunteer_name": name.strip(),
+                    "phone": phone.strip(),
+                    "email": email.strip(),
+                    "address": address.strip(),
+                    "city": city.strip(),
+                })
+                if "error" in result:
+                    st.error(f"Could not add the volunteer: "
+                             f"{result['error']}", icon=":material/error:")
+                else:
+                    ui.flash_success(
+                        f"{name.strip()} was added. Next: assign them a "
+                        "pickup under Pickup requests."
+                    )
+
+    if not volunteers:
+        ui.empty_state("No volunteers yet. Add the first one above!",
+                       icon=":material/directions_walk:")
+        return
+
+    st.subheader(ui.plural(len(volunteers), "volunteer"))
+    for column, volunteer in ui.grid(volunteers):
+        (_, name, phone, email, address, city, availability, status,
+         _created) = volunteer
+        with column, ui.card():
+            st.markdown(f"#### {name}")
+            badges = [ui.badge_markdown("DISABLED" if status != "ACTIVE"
+                                        else availability)]
+            st.markdown(" ".join(badges))
+            lines = []
+            place = ", ".join(part for part in (address, city) if part)
+            if place:
+                lines.append(f":material/location_on: {place}")
+            if phone:
+                lines.append(f":material/call: [{phone}](tel:{phone})")
+            if email:
+                lines.append(f":material/mail: [{email}](mailto:{email})")
+            st.markdown("  \n".join(lines) or "No contact details.")
 
 
 # ---------------------------------------------------------------- user access

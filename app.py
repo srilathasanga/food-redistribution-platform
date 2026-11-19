@@ -27,7 +27,7 @@ from app.screens.organizations import (
     my_organization_page,
     organizations_page,
 )
-from app.screens.people import user_access_page
+from app.screens.people import user_access_page, volunteers_page
 from app.screens.pickups import pickups_page
 from app.screens.reports import reports_page
 from app.user_service import get_organization, get_restaurant
@@ -143,6 +143,7 @@ PAGE_FUNCTIONS = {
     "pickups": pickups_page,
     "restaurants": restaurants_page,
     "organizations": organizations_page,
+    "volunteers": volunteers_page,
     "admin": reports_page,
     "user-access": user_access_page,
 }

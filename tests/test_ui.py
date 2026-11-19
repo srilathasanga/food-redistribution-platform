@@ -152,7 +152,8 @@ def test_share_food_form_says_what_to_fix():
 
 def test_donor_cannot_see_admin_pages():
     make_user("donor2@example.com", "DONOR")
-    for page in ("admin", "user-access", "restaurants", "pickups"):
+    for page in ("admin", "user-access", "restaurants", "pickups",
+                 "volunteers"):
         assert page not in pages_for("DONOR")
         # Typing the address of an admin page only shows the donor's Home.
         at = open_app("donor2@example.com", page)
@@ -228,11 +229,11 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
         assert not at.exception, (page, at.exception)
         assert not at.error, (page, [e.value for e in at.error])
 
-    # Verify the pending organization on Reports & tools.
-    go_to(at, "admin")
+    # Verify the pending organization on the Organizations page.
+    go_to(at, "organizations")
     [verify] = [b for b in at.button if b.key == f"verify_{pending_org}"]
     verify.click().run()
-    assert "verified successfully" in all_text(at)
+    assert "Grace Home is verified" in all_text(at)
 
     # Accept the pickup, then assign the volunteer.
     go_to(at, "pickups")
@@ -242,7 +243,7 @@ def test_admin_pages_with_data_and_admin_actions(make_donation, make_pickup,
                 if b.key == f"assign_volunteer_{pickup_id}"]
     assign.click().run()
     assert not at.exception
-    assert "Volunteer assigned successfully" in all_text(at)
+    assert "Volunteer assigned" in all_text(at)
 
 
 def test_privacy_page_is_public():

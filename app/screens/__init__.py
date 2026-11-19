@@ -9,7 +9,7 @@ that several roles share check `ctx.role` for what each one may DO.
     organizations.py  My organization, Organizations (verify/reject)
     food.py           Food donations / My donations, Available food
     pickups.py        Pickup requests / My pickups
-    people.py         User access
+    people.py         Volunteers, User access
     reports.py        Reports & tools
 """
 

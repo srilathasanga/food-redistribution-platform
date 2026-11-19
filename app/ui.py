@@ -187,6 +187,14 @@ _CSS = """
 }
 [data-testid="stSidebarNavLink"][aria-current="page"] * { color: #FFFFFF; }
 
+/* Small things people tap: the "?" help icons and caption links. */
+[data-testid="stTooltipIcon"] button, [data-testid="stTooltipIcon"] > div {
+    min-width: 32px; min-height: 32px;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+[data-testid="stCaptionContainer"] a { display: inline-block; padding: 12px 0; }
+[data-testid="stRadio"] label { min-height: 40px; align-items: center; }
+
 /* Phones: use the full width, keep a small margin. */
 @media (max-width: 640px) {
     [data-testid="stMainBlockContainer"] {
@@ -394,3 +402,49 @@ def plural(number, word, many=None):
     if number == 1:
         return f"1 {word}"
     return f"{number} {many or word + 's'}"
+
+
+# ---------------------------------------------------------------- charts
+# Same colours as the badges (see .streamlit/config.toml).
+COLOUR_HEX = {
+    "green": "#2B8A3E", "yellow": "#F59F00", "blue": "#0CA678",
+    "violet": "#7048E8", "red": "#E03131", "gray": "#868E96",
+    "primary": "#364FC7", "orange": "#F03E3E",
+}
+
+
+def status_chart(title, counts):
+    """Horizontal bar chart of statuses, coloured like the badges, with the
+    number written on each bar (so colour is never the only clue).
+
+    counts: list of (status code, number), in the order to show.
+    """
+    import altair as alt
+
+    data = [
+        {"Status": status_style(code)[0], "Count": int(number or 0),
+         "Colour": COLOUR_HEX.get(status_style(code)[1], "#868E96")}
+        for code, number in counts
+    ]
+    order = [row["Status"] for row in data]
+    # Leave room after the longest bar for its number.
+    biggest = max([row["Count"] for row in data] + [1])
+    base = alt.Chart(alt.Data(values=data)).encode(
+        y=alt.Y("Status:N", sort=order, title=None,
+                axis=alt.Axis(labelFontSize=15, labelLimit=200,
+                              labelColor="#1F2A37")),
+        x=alt.X("Count:Q", title=None, axis=None,
+                scale=alt.Scale(domain=[0, biggest * 1.2])),
+    )
+    bars = base.mark_bar(cornerRadiusEnd=6, height=26).encode(
+        color=alt.Color("Colour:N", scale=None, legend=None),
+        tooltip=["Status:N", "Count:Q"],
+    )
+    labels = base.mark_text(align="left", dx=6, fontSize=15,
+                            fontWeight="bold", color="#1F2A37").encode(
+        text="Count:Q",
+    )
+    with card():
+        st.markdown(f"**{title}**")
+        st.altair_chart((bars + labels).properties(height=44 * len(data)),
+                        width="stretch")

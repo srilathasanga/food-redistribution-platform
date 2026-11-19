@@ -5,7 +5,10 @@ import streamlit as st
 from app import ui
 from app.backend import (
     create_organization_from_api,
+    get_pending_organizations_from_api,
     get_verified_organizations_from_api,
+    reject_organization_from_api,
+    verify_organization_from_api,
 )
 from app.screens.kitchens import contact_problems
 from app.user_service import link_organization
@@ -143,11 +146,58 @@ def my_organization_page(ctx):
 def organizations_page(ctx):
     ui.page_header(
         "Organizations",
-        "Homes, shelters and charities that receive food.",
+        "Homes, shelters and charities that receive food. Verify new ones "
+        "first.",
         icon=":material/groups:",
     )
 
-    # Verified organizations.
+    # 1. The next action: organizations waiting to be checked.
+    pending = ui.rows(get_pending_organizations_from_api(), "organizations")
+    st.subheader("Waiting for verification")
+    if not pending:
+        st.success("Nobody is waiting. All organizations are checked.",
+                   icon=":material/task_alt:")
+    for column, organization in ui.grid(pending):
+        organization_id, name = organization[0], organization[1]
+        with column, ui.card():
+            st.markdown(f"#### {name}")
+            st.markdown(ui.badge_markdown("PENDING"))
+            st.markdown(_organization_lines(organization))
+            col1, col2 = st.columns(2)
+            if col1.button("Verify", key=f"verify_{organization_id}",
+                           type="primary", icon=":material/verified:",
+                           width="stretch"):
+                result = verify_organization_from_api(organization_id)
+                if "error" in result:
+                    st.error(result["error"], icon=":material/error:")
+                else:
+                    ui.flash_success(
+                        f"{name} is verified. Next: its people can now "
+                        "request food."
+                    )
+            with col2.popover("Not approved", icon=":material/block:",
+                              width="stretch"):
+                reason = st.text_input(
+                    "Why not? (they will see this)",
+                    key=f"reason_{organization_id}",
+                    placeholder="e.g. We could not confirm the address",
+                )
+                if st.button("Confirm: not approved",
+                             key=f"reject_{organization_id}",
+                             width="stretch"):
+                    if not reason.strip():
+                        st.error("Please give a reason.",
+                                 icon=":material/error:")
+                    else:
+                        result = reject_organization_from_api(
+                            organization_id, reason.strip())
+                        if "error" in result:
+                            st.error(result["error"], icon=":material/error:")
+                        else:
+                            ui.flash_success(f"{name} was marked as not "
+                                             "approved.")
+
+    # 2. Everyone already verified.
     verified = ui.rows(get_verified_organizations_from_api(),
                        "organizations")
     st.subheader(ui.plural(len(verified), "verified organization"))
@@ -164,7 +214,7 @@ def organizations_page(ctx):
             st.markdown(ui.badge_markdown("VERIFIED"))
             st.markdown(_organization_lines(organization))
 
-    # Add one on someone's behalf (rarely needed).
+    # 3. Add one on someone's behalf (rarely needed).
     with st.expander("Add an organization", icon=":material/add_business:"):
         details = _organization_form("organization_form",
                                      "Add organization")
@@ -176,5 +226,5 @@ def organizations_page(ctx):
             else:
                 ui.flash_success(
                     f"{details['organization_name']} was added. Next: "
-                    "verify it under Reports & tools."
+                    "verify it under \"Waiting for verification\"."
                 )

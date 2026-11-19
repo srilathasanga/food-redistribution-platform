@@ -1,763 +1,143 @@
-"""Reports & tools (admin)."""
+"""Reports & tools (admin): how the ministry is doing, and food that
+needs attention."""
 
 import streamlit as st
 
 from app import ui
 from app.backend import (
-    create_volunteer_from_api,
     get_donation_summary_from_api,
     get_food_risk_analysis_from_api,
     get_organization_summary_from_api,
-    get_pending_organizations_from_api,
     get_pickup_summary_from_api,
     get_volunteer_summary_from_api,
-    get_volunteers_from_api,
-    reject_organization_from_api,
-    verify_organization_from_api,
 )
+from app.timeutil import now_local
 
-flash_success = ui.flash_success
+# Most urgent first.
+URGENCY_ORDER = {"HIGH": 0, "MEDIUM": 1, "EXPIRED": 2, "LOW": 3}
+
+
+def _summary(response):
+    """A summary dict, or None after showing the error."""
+    if "error" in response:
+        st.error(response["error"], icon=":material/error:")
+        return None
+    return response
 
 
 def reports_page(ctx):
+    now = now_local()
+    ui.page_header("Reports & tools",
+                   "How the ministry is doing, and food that needs "
+                   "attention.",
+                   icon=":material/insights:")
 
-    st.header("👨‍💼 Admin Dashboard")
+    donations = _summary(get_donation_summary_from_api())
+    pickups = _summary(get_pickup_summary_from_api())
+    volunteers = _summary(get_volunteer_summary_from_api())
+    organizations = _summary(get_organization_summary_from_api())
 
-    # -----------------------------------------------------
-    # VOLUNTEER SUMMARY
-    # -----------------------------------------------------
+    # ---- Impact in numbers
+    cards = []
+    if donations:
+        cards += [
+            dict(label="Food shared", value=donations["total_donations"],
+                 caption="donations so far", icon=":material/soup_kitchen:",
+                 tone="royal"),
+            dict(label="Delivered", value=donations["delivered_donations"],
+                 caption="reached people in need",
+                 icon=":material/task_alt:", tone="green"),
+        ]
+    if volunteers:
+        cards.append(dict(
+            label="Volunteers", value=volunteers["active_volunteers"],
+            caption=f"{volunteers['available_volunteers']} free right now",
+            icon=":material/directions_walk:", tone="teal",
+            button_label="See volunteers", page=ctx.pages["volunteers"]))
+    if organizations:
+        cards.append(dict(
+            label="Organizations",
+            value=organizations["verified_organizations"],
+            caption=(f"verified · {organizations['pending_organizations']} "
+                     "waiting"),
+            icon=":material/groups:", tone="purple",
+            button_label="See organizations",
+            page=ctx.pages["organizations"]))
+    for column, details in ui.grid(cards):
+        with column:
+            ui.stat_card(**details)
 
-    summary = get_volunteer_summary_from_api()
+    # ---- Where things stand (charts use the badge colours)
+    charts = []
+    if donations:
+        charts.append(("Donations by status", [
+            ("AVAILABLE", donations["available_donations"]),
+            ("RESERVED", donations["reserved_donations"]),
+            ("PICKED_UP", donations["picked_up_donations"]),
+            ("DELIVERED", donations["delivered_donations"]),
+        ]))
+    if pickups:
+        charts.append(("Pickups by status", [
+            ("REQUESTED", pickups["requested_pickups"]),
+            ("ACCEPTED", pickups["accepted_pickups"]),
+            ("PICKED_UP", pickups["picked_up_pickups"]),
+            ("DELIVERED", pickups["delivered_pickups"]),
+        ]))
+    if charts:
+        st.subheader("Where things stand")
+        for column, (title, counts) in ui.grid(charts):
+            with column:
+                ui.status_chart(title, counts)
 
-    if "error" in summary:
+    _food_needing_attention(ctx, now)
 
-        st.error(summary["error"])
 
-    else:
+def _food_needing_attention(ctx, now):
+    st.subheader("Food that needs attention")
+    risks = ui.rows(get_food_risk_analysis_from_api(), "risk_analysis")
+    if not risks:
+        st.success("No food is waiting to be collected right now.",
+                   icon=":material/task_alt:")
+        return
 
-        col1, col2, col3, col4 = st.columns(4)
+    counts = {level: sum(1 for r in risks if r["risk_level"] == level)
+              for level in URGENCY_ORDER}
+    st.markdown(" ".join(
+        f"{ui.badge_markdown(level)} **{counts[level]}**"
+        for level in ("HIGH", "MEDIUM", "LOW", "EXPIRED") if counts[level]
+    ))
 
-        with col1:
+    risks.sort(key=lambda r: (URGENCY_ORDER.get(r["risk_level"], 9),
+                              r["hours_remaining"]))
+    needs_attention = [r for r in risks if r["risk_level"] != "LOW"]
+    plenty_of_time = [r for r in risks if r["risk_level"] == "LOW"]
 
-            st.metric(
-                "👥 Total Volunteers",
-                summary["total_volunteers"]
-            )
+    if not needs_attention:
+        st.caption("Nothing urgent. All food has plenty of time.")
+    for column, risk in ui.grid(needs_attention):
+        with column:
+            _risk_card(risk, now)
+    if needs_attention:
+        st.page_link(ctx.pages["pickups"], label="Arrange pickups",
+                     icon=":material/arrow_forward:")
+    if plenty_of_time:
+        with st.expander(f"Plenty of time ({len(plenty_of_time)})",
+                         icon=":material/check_circle:"):
+            for column, risk in ui.grid(plenty_of_time):
+                with column:
+                    _risk_card(risk, now)
 
-        with col2:
 
-            st.metric(
-                "✅ Active Volunteers",
-                summary["active_volunteers"]
-            )
-
-        with col3:
-
-            st.metric(
-                "🟢 Available Volunteers",
-                summary["available_volunteers"]
-            )
-
-        with col4:
-
-            st.metric(
-                "🚚 Busy Volunteers",
-                summary["busy_volunteers"]
-            )
-
-    # -----------------------------------------------------
-    # ORGANIZATION SUMMARY
-    # -----------------------------------------------------
-
-    organization_summary = (
-        get_organization_summary_from_api()
-    )
-
-    if "error" in organization_summary:
-
-        st.error(
-            organization_summary["error"]
+def _risk_card(risk, now):
+    expired = risk["risk_level"] == "EXPIRED"
+    with ui.card():
+        st.markdown(f"**{risk['food_name']}** · "
+                    f"{ui.amount(risk['quantity'], risk['unit'])}")
+        st.markdown(ui.badge_markdown(risk["risk_level"]) + " "
+                    + ui.badge_markdown(risk["donation_status"]))
+        st.markdown(
+            (":material/error: Expired "
+             if expired else ":material/schedule: Expires ")
+            + f"**{ui.friendly_time(risk['expiry_time'], now)}**  \n"
+            f":material/lightbulb: {risk['recommended_action']}"
         )
-
-    else:
-
-        st.subheader("🏢 Organization Summary")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-
-            st.metric(
-                "🏢 Total Organizations",
-                organization_summary["total_organizations"]
-            )
-
-        with col2:
-
-            st.metric(
-                "✅ Verified",
-                organization_summary["verified_organizations"]
-            )
-
-        with col3:
-
-            st.metric(
-                "⏳ Pending",
-                organization_summary["pending_organizations"]
-            )
-
-        with col4:
-
-            st.metric(
-                "❌ Rejected",
-                organization_summary["rejected_organizations"]
-            )
-
-    # -----------------------------------------------------
-    # DONATION SUMMARY
-    # -----------------------------------------------------
-
-    donation_summary = get_donation_summary_from_api()
-
-    if "error" in donation_summary:
-
-        st.error(
-            donation_summary["error"]
-        )
-
-    else:
-
-        st.subheader("🍱 Donation Summary")
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-
-            st.metric(
-                "🍱 Total Donations",
-                donation_summary["total_donations"]
-            )
-
-        with col2:
-
-            st.metric(
-                "🟢 Available",
-                donation_summary["available_donations"]
-            )
-
-        with col3:
-
-            st.metric(
-                "🔒 Reserved",
-                donation_summary["reserved_donations"]
-            )
-
-        with col4:
-
-            st.metric(
-                "🚚 Picked Up",
-                donation_summary["picked_up_donations"]
-            )
-
-        with col5:
-
-            st.metric(
-                "✅ Delivered",
-                donation_summary["delivered_donations"]
-            )
-        st.subheader("📊 Donation Status")
-
-        donation_chart_data = {
-            "Status": [
-                "Available",
-                "Reserved",
-                "Picked Up",
-                "Delivered"
-            ],
-            "Count": [
-                donation_summary["available_donations"],
-                donation_summary["reserved_donations"],
-                donation_summary["picked_up_donations"],
-                donation_summary["delivered_donations"]
-            ]
-        }
-
-        st.bar_chart(
-            donation_chart_data,
-            x="Status",
-            y="Count"
-        )
-
-    # -----------------------------------------------------
-    # PICKUP SUMMARY
-    # -----------------------------------------------------
-
-    pickup_summary = get_pickup_summary_from_api()
-
-    if "error" in pickup_summary:
-
-        st.error(
-            pickup_summary["error"]
-        )
-
-    else:
-
-        st.subheader("🚚 Pickup Summary")
-
-        col1, col2, col3, col4, col5 = st.columns(5)
-
-        with col1:
-
-            st.metric(
-                "🚚 Total Pickups",
-                pickup_summary["total_pickups"]
-            )
-
-        with col2:
-
-            st.metric(
-                "📋 Requested",
-                pickup_summary["requested_pickups"]
-            )
-
-        with col3:
-
-            st.metric(
-                "🤝 Accepted",
-                pickup_summary["accepted_pickups"]
-            )
-
-        with col4:
-
-            st.metric(
-                "📦 Picked Up",
-                pickup_summary["picked_up_pickups"]
-            )
-
-        with col5:
-
-            st.metric(
-                "✅ Delivered",
-                pickup_summary["delivered_pickups"]
-            )
-        st.subheader("📊 Pickup Status")
-
-        pickup_chart_data = {
-            "Status": [
-                "Requested",
-                "Accepted",
-                "Picked Up",
-                "Delivered"
-            ],
-            "Count": [
-                pickup_summary["requested_pickups"],
-                pickup_summary["accepted_pickups"],
-                pickup_summary["picked_up_pickups"],
-                pickup_summary["delivered_pickups"]
-            ]
-        }
-
-        st.bar_chart(
-            pickup_chart_data,
-            x="Status",
-            y="Count"
-        )
-
-    # =====================================================
-    # AI FOOD RISK ANALYSIS
-    # =====================================================
-
-    st.subheader("🤖 AI Food Risk Analysis")
-
-    risk_response = get_food_risk_analysis_from_api()
-
-    if "error" in risk_response:
-
-        st.error(
-            risk_response["error"]
-        )
-
-    else:
-
-        risk_results = risk_response.get(
-            "risk_analysis",
-            []
-        )
-
-        if not risk_results:
-
-            st.success(
-                "No active donations require risk analysis. ✅"
-            )
-
-        else:
-
-            # -------------------------------------------------
-            # AI RISK SUMMARY
-            # -------------------------------------------------
-
-            high_count = sum(
-                1
-                for risk in risk_results
-                if risk["risk_level"] == "HIGH"
-            )
-
-            medium_count = sum(
-                1
-                for risk in risk_results
-                if risk["risk_level"] == "MEDIUM"
-            )
-
-            low_count = sum(
-                1
-                for risk in risk_results
-                if risk["risk_level"] == "LOW"
-            )
-
-            expired_count = sum(
-                1
-                for risk in risk_results
-                if risk["risk_level"] == "EXPIRED"
-            )
-
-            st.markdown(
-                "### 📊 AI Risk Summary"
-            )
-
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-
-                st.metric(
-                    "🔴 High Risk",
-                    high_count
-                )
-
-            with col2:
-
-                st.metric(
-                    "🟠 Medium Risk",
-                    medium_count
-                )
-
-            with col3:
-
-                st.metric(
-                    "🟢 Low Risk",
-                    low_count
-                )
-
-            with col4:
-
-                st.metric(
-                    "⚫ Expired",
-                    expired_count
-                )
-            st.subheader("📊 Food Risk Distribution")
-
-            risk_chart_data = {
-                "Risk Level": [
-                    "HIGH",
-                    "MEDIUM",
-                    "LOW",
-                    "EXPIRED"
-                ],
-                "Count": [
-                    high_count,
-                    medium_count,
-                    low_count, 
-                    expired_count
-                ]
-            }
-
-            st.bar_chart(
-                risk_chart_data,
-                x="Risk Level",
-                y="Count"
-            )
-
-            # -------------------------------------------------
-            # INDIVIDUAL RISK ANALYSIS
-            # -------------------------------------------------
-
-            st.markdown(
-                "### 🔍 Donation Risk Details"
-            )
-
-            risk_priority = {
-                "HIGH": 1,
-                "MEDIUM": 2,
-                "LOW": 3,
-                "EXPIRED": 4
-            }
-
-            risk_results = sorted(
-                risk_results,
-                key=lambda risk: (
-                    risk_priority.get(
-                        risk["risk_level"],
-                        99
-                    ),
-                    risk["hours_remaining"]
-                )
-            )
-
-            for risk in risk_results:
-
-                st.markdown("---")
-
-                st.write(
-                    f"### 🍱 {risk['food_name']}"
-                )
-
-                col1, col2, col3, col4 = st.columns(4)
-
-                with col1:
-
-                    st.write(
-                        f"**Donation ID:** "
-                        f"{risk['donation_id']}"
-                    )
-
-                with col2:
-
-                    st.write(
-                        f"**Quantity:** "
-                        f"{risk['quantity']} "
-                        f"{risk['unit']}"
-                    )
-
-                with col3:
-
-                    st.write(
-                        f"**Risk:** "
-                        f"{risk['risk_level']}"
-                    )
-
-                with col4:
-
-                    st.write(
-                        f"**Score:** "
-                        f"{risk['risk_score']}"
-                    )
-
-                st.write(
-                    f"**Priority:** "
-                    f"{risk['priority']}"
-                )
-
-                st.info(
-                    f"**🤖 Recommended Action:** "
-                    f"{risk['recommended_action']}"
-                )
-
-                st.write(
-                    f"**Hours Remaining:** "
-                    f"{risk['hours_remaining']}"
-                )
-
-                st.write("**Reasons:**")
-
-                for reason in risk["reasons"]:
-
-                    st.write(
-                        f"- {reason}"
-                    )
-
-    # -----------------------------------------------------
-    # PENDING ORGANIZATIONS
-    # -----------------------------------------------------
-
-    st.divider()
-
-    st.subheader("Pending Organizations")
-
-    try:
-
-        organization_response = (
-            get_pending_organizations_from_api()
-        )
-
-        if "error" in organization_response:
-
-            st.error(
-                organization_response["error"]
-            )
-
-            organizations = []
-
-        else:
-
-            organizations = (
-                organization_response["organizations"]
-            )
-
-        if organizations:
-
-            for organization in organizations:
-
-                organization_id = organization[0]
-                organization_name = organization[1]
-                contact_person = organization[2]
-                phone = organization[3]
-                email = organization[4]
-                address = organization[5]
-                city = organization[6]
-                organization_type = organization[7]
-                verification_status = organization[8]
-                status = organization[9]
-
-                st.markdown("---")
-
-                st.subheader(
-                    f"🏢 {organization_name}"
-                )
-
-                st.write(
-                    f"**Organization ID:** "
-                    f"{organization_id}"
-                )
-
-                st.write(
-                    f"**Contact Person:** "
-                    f"{contact_person}"
-                )
-
-                st.write(
-                    f"**Phone:** {phone}"
-                )
-
-                st.write(
-                    f"**Email:** {email}"
-                )
-
-                st.write(
-                    f"**Address:** {address}"
-                )
-
-                st.write(
-                    f"**City:** {city}"
-                )
-
-                st.write(
-                    f"**Organization Type:** "
-                    f"{organization_type}"
-                )
-
-                st.write(
-                    f"**Verification Status:** "
-                    f"{verification_status}"
-                )
-
-                st.write(
-                    f"**Status:** {status}"
-                )
-
-                st.write(
-                    "### Admin Decision"
-                )
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-
-                    if st.button(
-                        "✅ Verify Organization",
-                        key=f"verify_{organization_id}"
-                    ):
-
-                        result = (
-                            verify_organization_from_api(
-                                organization_id
-                            )
-                        )
-
-                        if "error" in result:
-
-                            st.error(
-                                f"Error verifying organization: "
-                                f"{result['error']}"
-                            )
-
-                        else:
-
-                            flash_success(
-                                f"Organization "
-                                f"#{result['organization_id']} "
-                                f"verified successfully!"
-                            )
-
-                with col2:
-
-                    rejection_reason = st.text_input(
-                        "Rejection Reason",
-                        key=f"reason_{organization_id}",
-                        placeholder="Enter reason for rejection"
-                    )
-
-                    if st.button(
-                        "❌ Reject Organization",
-                        key=f"reject_{organization_id}"
-                    ):
-
-                        if not rejection_reason.strip():
-
-                            st.warning(
-                                "Please enter a rejection reason."
-                            )
-
-                        else:
-
-                            result = (
-                                reject_organization_from_api(
-                                    organization_id,
-                                    rejection_reason
-                                )
-                            )
-
-                            if "error" in result:
-
-                                st.error(
-                                    f"Error rejecting organization: "
-                                    f"{result['error']}"
-                                )
-
-                            else:
-
-                                flash_success(
-                                    f"Organization "
-                                    f"#{result['organization_id']} "
-                                    f"has been rejected successfully!"
-                                )
-
-        else:
-
-            st.success(
-                "No organizations are waiting "
-                "for verification. ✅"
-            )
-
-    except Exception as e:
-
-        st.error(
-            f"Error loading pending organizations: {e}"
-        )
-
-    # -----------------------------------------------------
-    # VOLUNTEER MANAGEMENT
-    # -----------------------------------------------------
-
-    st.divider()
-
-    st.subheader("🚗 Volunteer Management")
-
-    st.write("### Add Volunteer")
-
-    with st.form("volunteer_form"):
-
-        volunteer_name = st.text_input(
-            "Volunteer Name"
-        )
-
-        phone = st.text_input(
-            "Phone"
-        )
-
-        email = st.text_input(
-            "Email"
-        )
-
-        address = st.text_area(
-            "Address"
-        )
-
-        city = st.text_input(
-            "City"
-        )
-
-        submitted = st.form_submit_button(
-            "Add Volunteer"
-        )
-
-        if submitted:
-
-            if not volunteer_name.strip():
-
-                st.error(
-                    "Volunteer name is required."
-                )
-
-            elif not phone.strip():
-
-                st.error(
-                    "Phone number is required."
-                )
-
-            elif not city.strip():
-
-                st.error(
-                    "City is required."
-                )
-
-            else:
-
-                volunteer_data = {
-                    "volunteer_name": volunteer_name,
-                    "phone": phone,
-                    "email": email,
-                    "address": address,
-                    "city": city
-                }
-
-                result = create_volunteer_from_api(
-                    volunteer_data
-                )
-
-                if "error" in result:
-
-                    st.error(
-                        f"Error creating volunteer: "
-                        f"{result['error']}"
-                    )
-
-                else:
-
-                    flash_success(
-                        f"Volunteer created successfully! "
-                        f"Volunteer ID: "
-                        f"{result['volunteer_id']}"
-                    )
-
-    st.divider()
-
-    st.write("### Registered Volunteers")
-
-    volunteer_response = get_volunteers_from_api()
-
-    if "error" in volunteer_response:
-
-        st.error(
-            volunteer_response["error"]
-        )
-
-    else:
-
-        volunteers = volunteer_response["volunteers"]
-
-        if volunteers:
-
-            for volunteer in volunteers:
-
-                st.write(
-                    f"**{volunteer[1]}** — "
-                    f"{volunteer[2]} — "
-                    f"{volunteer[5]} — "
-                    f"Availability: {volunteer[6]} — "
-                    f"Status: {volunteer[7]}"
-                )
-
-        else:
-
-            st.info(
-                "No volunteers registered yet."
-            )
