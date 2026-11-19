@@ -18,7 +18,12 @@ PRIVACY_LINK = "?page=privacy"
 # Shown here and on the sign-in screen. Change it in this one place.
 MINISTRY_NAME = "Test Ministry"
 
-LAST_UPDATED = "19 November 2026"
+# Who to contact about the app or your data (privacy page and the
+# sign-in page footer). Change them here, in this one place.
+CONTACT_NAME = "Srilatha"
+CONTACT_EMAIL = "sangasrilatha8@gmail.com"
+
+LAST_UPDATED = "20 November 2026"
 
 PRIVACY_POLICY = f"""
 **{MINISTRY_NAME}** · Food Redistribution Platform
@@ -93,8 +98,8 @@ connections.
 You can ask to see the information we hold about you, to correct it, or
 to delete it. Please contact the ministry admin:
 
-- **Srilatha**, {MINISTRY_NAME}
-- Email: [srilathasanga@gmail.com](mailto:srilathasanga@gmail.com)
+- **{CONTACT_NAME}**, {MINISTRY_NAME}
+- Email: [{CONTACT_EMAIL}](mailto:{CONTACT_EMAIL})
 
 ### Changes to this policy
 

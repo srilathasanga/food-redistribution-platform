@@ -17,8 +17,14 @@ import streamlit as st
 # clear the caches: see app/backend.py.
 from app.backend import ensure_admin, get_user, record_login, request_access
 from app.config import get_list_setting, get_setting
-from app.privacy import MINISTRY_NAME, privacy_link_markdown
-from app.ui import centered_card, illustration
+from app import ui
+from app.privacy import (
+    CONTACT_EMAIL,
+    MINISTRY_NAME,
+    PRIVACY_LINK,
+    privacy_link_markdown,
+)
+from app.ui import centered_card
 from app.user_service import SELF_SERVICE_ROLES, normalize_email
 
 ROLE_LABELS = {
@@ -67,35 +73,87 @@ def _sign_out_link():
         _log_out()
 
 
-# How it works, in three short steps (sign-in screen).
-_HOW_IT_WORKS = (
-    (":material/soup_kitchen:", "Donors share surplus food"),
-    (":material/apartment:", "Verified homes and shelters request it"),
-    (":material/local_shipping:", "Volunteers pick it up and deliver it"),
+# The sign-in landing page: what the app does, who it is for, and ONE
+# call to action (Sign in with Google). Words kept short on purpose.
+HEADLINE = "Share surplus food with neighbours in need"
+SUBLINE = ("Good food that would go to waste reaches homes and shelters "
+           "nearby, delivered by volunteers.")
+
+# (step, title, icon, tone, one line)
+HOW_IT_WORKS = (
+    ("Step 1", "Share surplus food", ":material/soup_kitchen:", "green",
+     "Donors post the food they have to spare, in a minute."),
+    ("Step 2", "Homes request it", ":material/apartment:", "purple",
+     "Verified homes and shelters ask for what they can use."),
+    ("Step 3", "Volunteers deliver", ":material/local_shipping:", "coral",
+     "A volunteer picks it up and brings it while it is fresh."),
+)
+WHO_CAN_JOIN = (
+    (None, "Donors", ":material/storefront:", "green",
+     "Restaurants, caterers and families with good food to spare."),
+    (None, "Homes and shelters", ":material/home:", "purple",
+     "Homes, shelters and charities that feed people every day."),
+    (None, "Volunteers", ":material/directions_walk:", "coral",
+     "People who can pick up food and drop it off nearby."),
 )
 
 
-def _welcome_hero():
-    """Top of the sign-in card: who we are and what the app does."""
-    with st.container(horizontal_alignment="center"):
-        illustration("signin", width=240)
-    st.markdown(f"### :material/volunteer_activism: {MINISTRY_NAME}")
-    st.title("Share surplus food with neighbours in need")
-    st.markdown(
-        "We connect good food that would otherwise go to waste with "
-        "homes and shelters nearby, delivered by volunteers."
-    )
-    st.markdown("  \n".join(
-        f"{icon} {words}" for icon, words in _HOW_IT_WORKS
-    ))
+def _google_button(key):
+    """The one call to action. Google's G is added by CSS (app/ui.py)."""
+    if st.button("Sign in with Google", type="primary", key=key):
+        st.login()
 
 
-def _cant_sign_in_help():
-    st.markdown(
-        "**Can't sign in?** During the pilot only invited Gmail addresses "
-        "can sign in. Ask the ministry admin to add your Gmail, then try "
-        "again."
-    )
+def _dev_login_form():
+    st.warning("Development login is on (DEV_LOGIN=true). Do not use this "
+               "on the live app.", icon=":material/construction:")
+    with st.form("dev_login", border=False):
+        typed = st.text_input("Email to sign in as")
+        if st.form_submit_button("Sign in", type="primary",
+                                 icon=":material/login:"):
+            st.session_state["dev_email"] = normalize_email(typed)
+            st.rerun()
+
+
+def _landing_page(mode):
+    """Hero with the sign-in button, How it works, Who can join, help and
+    a slim footer. No database calls."""
+    ui.landing_style()
+    with st.container(key="landing-hero"):
+        words, picture = st.columns([11, 9], gap="large",
+                                    vertical_alignment="center")
+        with words:
+            st.html(ui.hero_text_html(MINISTRY_NAME, HEADLINE, SUBLINE,
+                                      highlight="neighbours in need"))
+            if mode == "google":
+                _google_button("google_sign_in")
+            else:
+                _dev_login_form()
+            st.html('<p class="fr-muted">For donors, partner homes and '
+                    "volunteers</p>")
+        with picture:
+            st.html(ui.hero_picture_html("signin"))
+
+    st.html('<h2 class="fr-landing-h2">How it works</h2>')
+    ui.info_cards(HOW_IT_WORKS, "how")
+    st.html('<h2 class="fr-landing-h2">Who can join</h2>')
+    ui.info_cards(WHO_CAN_JOIN, "join")
+
+    if mode == "google":
+        # Phones only: after scrolling, the button is here again.
+        with st.container(key="phone-only"):
+            _google_button("google_sign_in_bottom")
+
+    st.write("")
+    with st.expander("Trouble signing in?", icon=":material/help:"):
+        st.markdown(
+            "Anyone can sign in with Google. New people are approved by "
+            "the ministry admin before they can use the app.  \n"
+            "If the Google window shows an error or closes, please try "
+            "again. Still stuck? Write to the ministry admin (the email "
+            "address is at the bottom of this page)."
+        )
+    st.html(ui.footer_html(MINISTRY_NAME, PRIVACY_LINK, CONTACT_EMAIL))
 
 
 def _signed_in_email():
@@ -103,38 +161,14 @@ def _signed_in_email():
 
     if mode == "google":
         if not st.user.is_logged_in:
-            with centered_card():
-                _welcome_hero()
-                if st.button("Sign in with Google", type="primary",
-                             icon=":material/login:", width="stretch"):
-                    st.login()
-                st.caption(
-                    "Use the Google account (Gmail) the ministry admin "
-                    "added for you."
-                )
-                _cant_sign_in_help()
-                privacy_footer()
+            _landing_page("google")
             st.stop()
         return normalize_email(st.user.get("email")), st.user.get("name")
 
     if mode == "dev":
         email = st.session_state.get("dev_email")
         if not email:
-            with centered_card():
-                st.warning(
-                    "Development login is on (DEV_LOGIN=true). "
-                    "Do not use this on the live app.",
-                    icon=":material/construction:",
-                )
-                _welcome_hero()
-                with st.form("dev_login", border=False):
-                    typed = st.text_input("Email to sign in as")
-                    if st.form_submit_button("Sign in", type="primary",
-                                             icon=":material/login:",
-                                             width="stretch"):
-                        st.session_state["dev_email"] = normalize_email(typed)
-                        st.rerun()
-                privacy_footer()
+            _landing_page("dev")
             st.stop()
         return email, None
 
@@ -160,8 +194,17 @@ def _hello(name):
     return f", {first}" if first else ""
 
 
+def _signed_out_card():
+    """Same look as the landing page: light background, brand row, card."""
+    ui.landing_style()
+    st.html('<div style="display:flex;justify-content:center;'
+            'margin-bottom:.5rem">' + ui.brand_row_html(MINISTRY_NAME)
+            + "</div>")
+    return centered_card()
+
+
 def _waiting_screen(email, existing):
-    with centered_card():
+    with _signed_out_card():
         st.markdown("### :material/hourglass_top: Thanks for signing up!")
         st.markdown(
             f"Hi{_hello(existing['full_name'])}, your request "
@@ -182,7 +225,7 @@ def _request_access_screen(email, name, existing):
     if existing and existing["status"] == "PENDING":
         _waiting_screen(email, existing)
 
-    with centered_card():
+    with _signed_out_card():
         st.markdown(f"### :material/waving_hand: Welcome{_hello(name)}!")
         st.markdown(
             "Tell us a little about yourself. A ministry coordinator will "
@@ -221,7 +264,7 @@ def _request_access_screen(email, name, existing):
 
 
 def _switched_off_screen(email):
-    with centered_card():
+    with _signed_out_card():
         st.markdown("### :material/block: Your access is switched off")
         st.markdown(
             "An admin has switched off your account. If you think this is "

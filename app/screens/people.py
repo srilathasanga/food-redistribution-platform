@@ -121,8 +121,8 @@ def user_access_page(ctx):
         icon=":material/manage_accounts:",
     )
     st.info(
-        "New people must first be added as test users in Google Cloud → "
-        "Google Auth Platform → Audience → Test users.",
+        "Anyone can sign in with Google. New people are approved by the "
+        "ministry admin before they can use the app.",
         icon=":material/info:",
     )
 

@@ -109,3 +109,31 @@ def test_a_quick_action_form_request_only_lasts_on_its_page(monkeypatch):
     assert ui.form_requested("volunteer")
     ui.forget_form_request("home")             # went somewhere else
     assert not ui.form_requested("volunteer")
+
+
+# ---------------------------------------------------------------- sign-in page
+
+def test_landing_headline_is_escaped_and_highlighted():
+    markup = ui.hero_text_html("Grace <Ministry>", "Share food with neighbours",
+                               "One line.", highlight="neighbours")
+    assert "<h1>Share food with <em>neighbours</em></h1>" in markup
+    assert "Grace &lt;Ministry&gt;" in markup
+
+
+def test_landing_footer_has_privacy_link_and_contact():
+    from app.privacy import CONTACT_EMAIL, PRIVACY_LINK
+    markup = ui.footer_html("Ministry", PRIVACY_LINK, CONTACT_EMAIL)
+    assert f'href="{PRIVACY_LINK}"' in markup
+    assert f"mailto:{CONTACT_EMAIL}" in markup
+    assert "Made with love by volunteers" in markup
+
+
+def test_sign_in_text_matches_published_google_sign_in():
+    import inspect
+
+    from app import auth
+    from app.screens import people
+    words = inspect.getsource(auth) + inspect.getsource(people)
+    assert "Anyone can sign in with Google. New people are approved" in words
+    assert "invited" not in words.lower()
+    assert "test user" not in words.lower()

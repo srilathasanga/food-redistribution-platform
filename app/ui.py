@@ -927,6 +927,199 @@ def centered_card(width=560):
     return outer.container(border=True, width=width, key=_key("card"))
 
 
+# ---------------------------------------------------------------- landing
+# The signed-out screens: the sign-in landing page, and the request
+# access / waiting / switched-off cards. Their extra CSS is added only
+# there (landing_style), so it never touches the signed-in pages.
+
+# Google's "G", drawn in SVG (shown on a white circle on the blue button).
+_GOOGLE_G = (
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">'
+    '<path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85'
+    'C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 '
+    '13.72 17.74 9.5 24 9.5z"/>'
+    '<path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02'
+    'h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 '
+    '7.09-17.65z"/>'
+    '<path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27'
+    '-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 '
+    '10.78l7.97-6.19z"/>'
+    '<path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6'
+    'c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 '
+    '6.19C6.51 42.62 14.62 48 24 48z"/></svg>'
+)
+_GOOGLE_G_URI = ("data:image/svg+xml;base64,"
+                 + base64.b64encode(_GOOGLE_G.encode()).decode("ascii"))
+
+_LANDING_CSS = """
+<style>
+/* Signed-out screens: very light background with two soft shapes. */
+[data-testid="stApp"] {
+    background:
+        radial-gradient(circle at 92% 8%, rgba(255, 201, 201, .35) 0,
+                        rgba(255, 201, 201, 0) 260px),
+        radial-gradient(circle at 4% 70%, rgba(186, 200, 255, .30) 0,
+                        rgba(186, 200, 255, 0) 300px),
+        linear-gradient(180deg, #F8F9FF 0%, #EEF2FF 100%) fixed;
+}
+[data-testid="stMainBlockContainer"] { max-width: 1180px; }
+/* The page has its own brand row, so hide the small header logo. */
+[data-testid="stHeaderLogo"], [data-testid="stHeader"] img { display: none; }
+
+/* Brand row: logo + ministry name. */
+.fr-brand-row { display: flex; align-items: center; gap: .7rem; }
+.fr-brand-row img { width: 44px; height: 44px; }
+.fr-brand-row span {
+    font-family: "Poppins", sans-serif; font-weight: 600; font-size: 19px;
+    color: #1F2A37;
+}
+
+/* Hero: fills most of the first screen on a computer. */
+[class*="st-key-landing-hero"] {
+    min-height: min(74vh, 760px); justify-content: center;
+    padding: 1rem 0 2rem;
+}
+.fr-hero h1 {
+    font-family: "Poppins", sans-serif; font-weight: 700; font-size: 52px;
+    line-height: 1.12; color: #1F2A37; margin: 1.6rem 0 1rem; padding: 0;
+    letter-spacing: -.01em;
+}
+.fr-hero h1 em { font-style: normal; color: #364FC7; }
+.fr-hero p {
+    font-size: 20px; line-height: 1.55; color: #374151; margin: 0;
+    max-width: 34rem;
+}
+.fr-muted { font-size: 15px; color: #4B5563; margin: .2rem 0 0; }
+
+/* The one call to action: big royal-blue pill with Google's G. */
+[class*="st-key-google_sign_in"] button {
+    min-height: 3.6rem; border-radius: 999px;
+    padding: .5rem 1.8rem .5rem .55rem; margin-top: 1.4rem;
+    box-shadow: 0 10px 24px rgba(54, 79, 199, .30);
+}
+[class*="st-key-google_sign_in"] button p { font-size: 19px; }
+[class*="st-key-google_sign_in"] button::before {
+    content: ""; flex: 0 0 auto; width: 2.5rem; height: 2.5rem;
+    margin-right: .8rem; border-radius: 50%;
+    background: #FFFFFF url("GOOGLE_G") center / 1.45rem no-repeat;
+}
+
+/* Picture on a soft blurred lavender -> light coral blob, floating. */
+.fr-hero-art { position: relative; max-width: 500px; margin: 0 auto; }
+.fr-hero-art::before {
+    content: ""; position: absolute; inset: 4% 2%;
+    border-radius: 46% 54% 52% 48% / 55% 45% 55% 45%;
+    background: linear-gradient(135deg, #E5DBFF 0%, #FFD8D8 100%);
+    filter: blur(26px);
+}
+.fr-hero-art img {
+    position: relative; display: block; width: 100%; height: auto;
+    filter: drop-shadow(0 22px 28px rgba(54, 79, 199, .18));
+    animation: fr-float 6s ease-in-out infinite;
+}
+@keyframes fr-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .fr-hero-art img { animation: none; }
+}
+
+/* Section headings and the small step / role cards. */
+.fr-landing-h2 {
+    font-family: "Poppins", sans-serif; font-weight: 700; font-size: 30px;
+    color: #1F2A37; text-align: center; margin: 2.2rem 0 .4rem; padding: 0;
+}
+[class*="st-key-card-how"], [class*="st-key-card-join"] {
+    padding: 1.3rem 1.3rem 1rem;
+}
+[class*="st-key-card-how"] [data-testid="stCaptionContainer"] p {
+    font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: #364FC7;
+}
+
+/* Slim footer. */
+.fr-footer {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem 1.4rem;
+    border-top: 1px solid #DBE4FF; margin-top: 2.5rem; padding: 1.2rem 0 .5rem;
+    font-size: 15px; color: #4B5563;
+}
+.fr-footer a { color: #2B3FA0; display: inline-block; padding: 10px 0; }
+.fr-footer strong { color: #1F2A37; }
+
+/* The second sign-in button at the bottom is for phones only. */
+[class*="st-key-phone-only"] { display: none; }
+
+@media (max-width: 640px) {
+    [data-testid="stMainBlockContainer"] { padding-top: 1.5rem; }
+    [class*="st-key-landing-hero"] { min-height: 0; padding: 0; }
+    .fr-hero h1 { font-size: 34px; margin: 1.1rem 0 .7rem; }
+    .fr-hero p { font-size: 18px; }
+    [class*="st-key-google_sign_in"],
+    [class*="st-key-google_sign_in"] .stButton,
+    [class*="st-key-google_sign_in"] button { width: 100%; }
+    [class*="st-key-google_sign_in"] button { margin-top: 1rem; }
+    .fr-hero-art { max-width: 250px; margin-top: .5rem; }
+    .fr-landing-h2 { font-size: 26px; margin-top: 1.4rem; }
+    [class*="st-key-phone-only"] { display: block; }
+}
+</style>
+""".replace("GOOGLE_G", _GOOGLE_G_URI)
+
+
+def landing_style():
+    """Extra look for the signed-out screens (call once per run there)."""
+    st.html(_LANDING_CSS)
+
+
+def brand_row_html(ministry_name):
+    source, _ = _picture("logo-mark")
+    return (f'<div class="fr-brand-row"><img src="{source}" alt="">'
+            f"<span>{html.escape(ministry_name)}</span></div>")
+
+
+def hero_text_html(ministry_name, headline, subline, highlight=None):
+    """Brand row, the big headline (a real <h1>) and one short line.
+    `highlight`: words of the headline shown in royal blue."""
+    title = html.escape(headline)
+    if highlight:
+        title = title.replace(html.escape(highlight),
+                              f"<em>{html.escape(highlight)}</em>", 1)
+    return (f'<div class="fr-hero">{brand_row_html(ministry_name)}'
+            f"<h1>{title}</h1>"
+            f"<p>{html.escape(subline)}</p></div>")
+
+
+def hero_picture_html(name):
+    source, description = _picture(name)
+    return (f'<div class="fr-hero-art"><img src="{source}" '
+            f'alt="{html.escape(description)}"></div>')
+
+
+def info_cards(cards, kind):
+    """Three small white cards side by side (stacked on a phone).
+    cards: (step words or None, title, icon, tone, line)."""
+    for column, (step, title, icon, tone, line) in grid(cards,
+                                                         per_row=len(cards)):
+        with column, st.container(border=True, key=_key(f"card-{kind}")):
+            if step:
+                st.caption(step)
+            card_title(title, icon, tone)
+            st.markdown(line)
+
+
+def footer_html(ministry_name, privacy_link, contact_email):
+    email = html.escape(contact_email)
+    return (
+        '<footer class="fr-footer">'
+        f"<strong>{html.escape(ministry_name)}</strong>"
+        f'<a href="{html.escape(privacy_link)}" target="_self">'
+        "Privacy policy</a>"
+        f'<a href="mailto:{email}">{email}</a>'
+        "<span>Made with love by volunteers</span></footer>"
+    )
+
+
 # ---------------------------------------------------------------- time
 
 def to_datetime(value):
