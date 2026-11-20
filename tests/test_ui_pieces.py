@@ -125,7 +125,7 @@ def test_landing_footer_has_privacy_link_and_contact():
     markup = ui.footer_html("Ministry", PRIVACY_LINK, CONTACT_EMAIL)
     assert f'href="{PRIVACY_LINK}"' in markup
     assert f"mailto:{CONTACT_EMAIL}" in markup
-    assert "Made with love by volunteers" in markup
+    assert "Run by volunteers" in markup
 
 
 def test_sign_in_text_matches_published_google_sign_in():

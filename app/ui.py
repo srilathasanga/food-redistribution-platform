@@ -1116,7 +1116,7 @@ def footer_html(ministry_name, privacy_link, contact_email):
         f'<a href="{html.escape(privacy_link)}" target="_self">'
         "Privacy policy</a>"
         f'<a href="mailto:{email}">{email}</a>'
-        "<span>Made with love by volunteers</span></footer>"
+        "<span>Run by volunteers</span></footer>"
     )
 
 

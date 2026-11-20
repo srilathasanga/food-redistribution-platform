@@ -70,7 +70,7 @@ def _share_food_form(restaurant):
             height=80, placeholder="Street, area and landmark",
         )
         if not st.form_submit_button("Share this food", type="primary",
-                                     icon=":material/volunteer_activism:",
+                                     icon=":material/soup_kitchen:",
                                      width="stretch"):
             return None
 

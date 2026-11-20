@@ -1,9 +1,8 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="Two people shapes with a heart">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160" role="img" aria-label="Two people shapes">
   <circle cx="120" cy="84" r="66" fill="#EDF2FF"/>
   <circle cx="92" cy="72" r="16" fill="#748FFC"/>
   <path d="M62 128a30 30 0 0 1 60 0z" fill="#748FFC"/>
   <circle cx="148" cy="66" r="18" fill="#364FC7"/>
   <path d="M114 128a34 34 0 0 1 68 0z" fill="#364FC7"/>
   <rect x="56" y="126" width="128" height="6" rx="3" fill="#DBE4FF"/>
-  <path d="M120 46c-6-5-11-8-11-12 0-4 3-6 6-6 2 0 4 1 5 3 1-2 3-3 5-3 3 0 6 2 6 6 0 4-5 7-11 12z" fill="#FF6B6B"/>
 </svg>

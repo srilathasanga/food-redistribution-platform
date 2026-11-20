@@ -360,7 +360,7 @@ def _food_card(donation, organization_id, now, flash_success):
             f"**{ui.friendly_time(expiry_time, now)}**"
         )
         if st.button("Request this food", key=f"request_{donation_id}",
-                     type="primary", icon=":material/volunteer_activism:",
+                     type="primary", icon=":material/shopping_basket:",
                      width="stretch"):
             st.session_state[_CHOSEN_FOOD] = [
                 donation_id, food_name, expiry_time, pickup_address,

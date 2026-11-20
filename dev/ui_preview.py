@@ -30,7 +30,7 @@ st.info("Design preview with sample data. Nothing here is real or saved.",
 ui.page_header(
     "Good morning, Grace",
     "3 pickups are waiting for a volunteer and 1 item expires soon.",
-    icon=":material/volunteer_activism:",
+    icon=":material/soup_kitchen:",
 )
 
 # ------------------------------------------------------------ stat cards
